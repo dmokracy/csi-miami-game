@@ -65,8 +65,6 @@
         wall.create(700, 400, 'wall');
 
         enemies = this.physics.add.group();
-        //enemies.create(0, 250, 'enemy');
-        //enemies.setVelocityX(Phaser.Math.Between(100, 200));
 
         // Add score and health
         scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#000' });
@@ -103,6 +101,10 @@
         if (health <= 0)
         {
             gameOverText = this.add.text(325, 300, 'GAME OVER', { fontSize: '50px', fill: '#000' });
+            spawnTimer.remove();
+            enemies.children.iterate(function (child) {
+                child.disableBody(true, true);
+            });
         }
     }
 
