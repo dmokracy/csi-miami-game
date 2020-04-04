@@ -40,7 +40,7 @@
     var healthText;
     var score = 0;
     var scoreText;
-    var clicker;
+    var pointer;
     
     var game = new Phaser.Game(config);
     
@@ -67,9 +67,20 @@
         enemies.create(0, 250, 'enemy');
         enemies.setVelocityX(100);
 
+        // Add score
+        scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#000' });
+
         // Add colliders
         this.physics.add.collider(enemies, ground);
         this.physics.add.collider(enemies, wall);
+
+        enemies.children.iterate(function (child) {
+            child.setInteractive().on('pointerdown', function(pointer) {
+                score += 10;
+                scoreText.setText('Score: ' + score);
+                child.disableBody(true, true);
+            });
+        });
     }
     
     function update()
