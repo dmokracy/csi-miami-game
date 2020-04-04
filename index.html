@@ -65,17 +65,18 @@
 
         enemies = this.physics.add.group();
         enemies.create(0, 250, 'enemy');
-        enemies.setVelocityX(100);
+        enemies.setVelocityX(200);
 
-        // Add score
+        // Add score and health
         scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#000' });
+        healthText = this.add.text(500, 16, 'Health: 100', { fontSize: '32px', fill: '#000' });
 
         // Add colliders
         this.physics.add.collider(enemies, ground);
-        this.physics.add.collider(enemies, wall);
+        this.physics.add.collider(enemies, wall, hitWall, null, this);
 
         enemies.children.iterate(function (child) {
-            child.setInteractive().on('pointerdown', function(pointer) {
+            child.setInteractive().on('pointerdown', function (pointer) {
                 score += 10;
                 scoreText.setText('Score: ' + score);
                 child.disableBody(true, true);
@@ -85,6 +86,12 @@
     
     function update()
     {
+    }
+
+    function hitWall(enemy, wall)
+    {
+        health -= 10;
+        healthText.setText('Health: ' + health);
     }
 
 </script>
