@@ -72,14 +72,6 @@
         // Add colliders
         this.physics.add.collider(enemies, wall, hitWall, null, this);
 
-        enemies.children.iterate(function (child) {
-            child.setInteractive().on('pointerdown', function (pointer) {
-                score += 10;
-                scoreText.setText('Score: ' + score);
-                child.disableBody(true, true);
-            });
-        });
-
         spawnTimer = this.time.addEvent(
             { 
                 delay: Phaser.Math.Between(100, 2000),
