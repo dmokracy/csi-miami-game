@@ -70,7 +70,6 @@
         healthText = this.add.text(550, 16, 'Health: 100', { fontSize: '32px', fill: '#000' });
 
         // Add colliders
-        this.physics.add.collider(enemies, ground);
         this.physics.add.collider(enemies, wall, hitWall, null, this);
 
         enemies.children.iterate(function (child) {
