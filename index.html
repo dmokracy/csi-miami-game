@@ -22,7 +22,6 @@
         physics: {
             default: 'arcade',
             arcade: {
-                gravity: { y: 300 },
                 debug: false
             }
         },
@@ -98,6 +97,7 @@
     {
         health -= 10;
         healthText.setText('Health: ' + health);
+
         if (health <= 0)
         {
             gameOverText = this.add.text(325, 300, 'GAME OVER', { fontSize: '50px', fill: '#000' });
@@ -110,7 +110,7 @@
 
     function spawnEnemy()
     {
-        var e = enemies.create(0, 250, 'enemy');
+        var e = enemies.create(0, Phaser.Math.Between(300, 600), 'enemy');
         e.setVelocityX(Phaser.Math.Between(100, 200));
         e.setInteractive().on('pointerdown', function (pointer) {
             score += 10;
