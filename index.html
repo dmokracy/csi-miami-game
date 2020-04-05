@@ -50,18 +50,28 @@
         this.load.image('ground', 'assets/testground.png');
         this.load.image('wall', 'assets/testwall.png');
         this.load.image('enemy', 'assets/testenemy.png');
+        this.load.image('ocean', 'assets/ocean.png');
+        this.load.image('sun', 'assets/sun.png');
+        this.load.image('invisibleWall', 'assets/invisible_wall_element.png');
     }
     
     function create()
     {
+        // Add background elements
         this.add.image(400, 300, 'sky');
+        this.add.image(600, 100, 'sun').setScale(0.5);
+        this.add.image(400, 450, 'ground');
+        this.add.image(400, 300, 'ocean');
 
-        // Instantiate objects
-        ground = this.physics.add.staticGroup();
-        ground.create(400, 450, 'ground'); 
+        // Instantiate physics objects
+        wall = this.physics.add.staticGroup({
+            key: 'invisibleWall',
+            repeat: 15,
+            setXY: { x: 850, y: 310, stepX: 20, stepY: 20 }
+        });
 
-        wall = this.physics.add.staticGroup();
-        wall.create(700, 400, 'wall');
+        //wall.create(700, 400, 'wall');
+
 
         enemies = this.physics.add.group();
 
@@ -92,10 +102,10 @@
         if (health <= 0)
         {
             gameOverText = this.add.text(325, 300, 'GAME OVER', { fontSize: '50px', fill: '#000' });
-            spawnTimer.remove();
-            enemies.children.iterate(function (child) {
-                child.disableBody(true, true);
-            });
+            //spawnTimer.remove();
+            //enemies.children.iterate(function (child) {
+            //    child.disableBody(true, true);
+            //});
         }
     }
 
