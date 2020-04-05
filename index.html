@@ -96,8 +96,11 @@
 
     function hitWall(enemy, wall)
     {
-        health -= 10;
-        healthText.setText('Health: ' + health);
+        if (health > 0)
+        {
+            health -= 10;
+            healthText.setText('Health: ' + health);
+        }
 
         if (health <= 0)
         {
