@@ -139,14 +139,23 @@
         e.setData('lane', l);
         this.physics.add.collider(e, l);
 
+        // Add enemy health
+        e.setData('health', 100);
+
         // Choose a random walk speed for the enemy
         e.setVelocityX(Phaser.Math.Between(100, 200));
 
         // Add clicker function
         e.setInteractive().on('pointerdown', function (pointer) {
-            score += 10;
-            scoreText.setText('Score: ' + score);
-            e.disableBody(true, true);
+            health = e.getData('health');
+            health -= 50;
+            if (health <= 0)
+            {
+                score += 10;
+                scoreText.setText('Score: ' + score);
+                e.disableBody(true, true);
+            }
+            e.setData('health', health);
         });
     }
 
