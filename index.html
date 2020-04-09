@@ -22,7 +22,6 @@
         physics: {
             default: 'arcade',
             arcade: {
-                gravity: { y: 300 },
                 debug: false
             }
         },
@@ -35,7 +34,7 @@
     
     var enemies;
     var ground;
-    var wall;
+    var walls;
     var lanes;
     var playerHealth = 100;
     var playerHealthText;
@@ -50,11 +49,10 @@
     {
         this.load.image('sky', 'assets/sky.png');
         this.load.image('ground', 'assets/testground.png');
-        //this.load.image('wall', 'assets/testwall.png');
         this.load.image('enemy', 'assets/testenemy.png');
         this.load.image('ocean', 'assets/ocean.png');
         this.load.image('sun', 'assets/sun.png');
-        this.load.image('wallElement', 'assets/wall_element.png');
+        this.load.image('wall', 'assets/wall.png');
         this.load.image('lane', 'assets/lane.png');
     }
     
@@ -68,13 +66,6 @@
 
         // Instantiate physics objects
 
-        // Create wall group
-        wall = this.physics.add.staticGroup({
-            key: 'wallElement',
-            repeat: 15,
-            setXY: { x: 850, y: 310, stepX: 20, stepY: 20 }
-        });
-
         // Create lanes
         lanes = this.physics.add.staticGroup({
             key: 'lane',
@@ -82,6 +73,15 @@
             setXY: { x: 400, y: 300, stepY: 5 },
             visible: false
         });
+
+        // Create wall group
+        walls = this.physics.add.staticGroup({
+            key: 'wall',
+            repeat: 60,
+            setXY: { x: 500, y: 300, stepX: 3 },
+            visible: false
+        });
+
 
         // Create enemies
         enemies = this.physics.add.group();
@@ -92,7 +92,7 @@
         playerHealthText = this.add.text(550, 16, 'Health: 100', { fontSize: '32px', fill: '#000' });
 
         // Add collider between all enemies and wall
-        this.physics.add.collider(enemies, wall, hitWall, null, this);
+        //this.physics.add.collider(enemies, wall, hitWall, null, this);
 
         // Spawn timer for the enemy
         spawnTimer = this.time.addEvent(
@@ -128,23 +128,31 @@
 
     function spawnEnemy()
     {
-        // Choose a random lane for this enemy to spawn in
-        var l = lanes.children.entries[Phaser.Math.Between(0, 59)];
+        // Choose a random lane/wall for this enemy
+        var index = Phaser.Math.Between(0, 59);
+        var l = lanes.children.entries[index];
+        var w = walls.children.entries[index];
 
         // Instantiate enemy starting position
         var e = enemies.create();
         e.x = 0;
         e.y = l.y - l.height/2 - e.height/2;
 
+        // Choose a random walk speed for the enemy
+        var speed = Phaser.Math.Between(100, 200);
+        e.setData('speed', speed);
+        e.setVelocityX(speed);
+
         // Add collider between the enemy and its respective lane
         e.setData('lane', l);
-        this.physics.add.collider(e, l);
+        this.physics.add.collider(e, l, landOnGround, null, this);
+
+        // Add collider between the enemy and its respective wall
+        e.setData('wall', w);
+        this.physics.add.collider(e, w, hitWall, null, this);
 
         // Add enemy health
         e.setData('health', 100);
-
-        // Choose a random walk speed for the enemy
-        e.setVelocityX(Phaser.Math.Between(100, 200));
 
         // Add clicker function
         e.setInteractive().on('pointerdown', function (pointer) {
@@ -157,7 +165,15 @@
                 e.disableBody(true, true);
             }
             e.setData('health', health);
+            e.setGravityY(300);
+            e.setVelocityY(-300);
         });
+    }
+
+    function landOnGround(enemy, ground)
+    {
+        enemy.setVelocityX(enemy.getData('speed'));
+        enemy.setGravityY(0);
     }
 
 </script>
