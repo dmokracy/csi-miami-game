@@ -37,8 +37,8 @@
     var ground;
     var wall;
     var lanes;
-    var health = 100;
-    var healthText;
+    var playerHealth = 100;
+    var playerHealthText;
     var score = 0;
     var scoreText;
     var gameOverText;
@@ -79,7 +79,8 @@
         lanes = this.physics.add.staticGroup({
             key: 'lane',
             repeat: 60,
-            setXY: { x: 400, y: 300, stepY: 5 }
+            setXY: { x: 400, y: 300, stepY: 5 },
+            visible: false
         });
 
         // Create enemies
@@ -88,7 +89,7 @@
 
         // Add score and health
         scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#000' });
-        healthText = this.add.text(550, 16, 'Health: 100', { fontSize: '32px', fill: '#000' });
+        playerHealthText = this.add.text(550, 16, 'Health: 100', { fontSize: '32px', fill: '#000' });
 
         // Add collider between all enemies and wall
         this.physics.add.collider(enemies, wall, hitWall, null, this);
@@ -109,13 +110,13 @@
 
     function hitWall(enemy, wall)
     {
-        if (health > 0)
+        if (playerHealth > 0)
         {
-            health -= 10;
-            healthText.setText('Health: ' + health);
+            playerHealth -= 10;
+            playerHealthText.setText('Health: ' + playerHealth);
         }
 
-        if (health <= 0)
+        if (playerHealth <= 0)
         {
             gameOverText = this.add.text(325, 300, 'GAME OVER', { fontSize: '50px', fill: '#000' });
             //spawnTimer.remove();
