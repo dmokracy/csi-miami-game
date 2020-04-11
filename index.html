@@ -42,7 +42,16 @@
     var scoreText;
     var gameOverText;
     //var spawnTimer;
-    var selectedWeapon = "teleporter";
+    const weapons = {
+        BOOK: 'book',
+        BUBBLE: 'bubble',
+        HIRAISHIN: 'hiraishin',
+        PIKACHU: 'pikachu',
+        PORTAL: 'portal',
+        TELEPORTER: 'teleporter',
+    }
+    var selectedWeapon = weapons.TELEPORTER;
+    var selectedWeaponText;
 
     var game = new Phaser.Game(config);
     
@@ -55,6 +64,7 @@
         this.load.image('sun', 'assets/sun.png');
         this.load.image('wall', 'assets/wall.png');
         this.load.image('lane', 'assets/lane.png');
+        this.load.image('book', 'assets/book.png');
     }
     
     function create()
@@ -70,25 +80,34 @@
         // Then create listener event for the key input, which because of the created Key should only fire once.
         var key1 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE);
         this.input.keyboard.on('keydown_ONE', function (event) {
-            selectedWeapon = "teleporter";
+            selectedWeapon = weapons.TELEPORTER;
+            selectedWeaponText.setText('Weapon: ' + selectedWeapon);
         });
         var key2 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TWO);
         this.input.keyboard.on('keydown_TWO', function (event) {
-            selectedWeapon = "education";
+            selectedWeapon = weapons.BOOK;
+            selectedWeaponText.setText('Weapon: ' + selectedWeapon);
         });
         var key3 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.THREE);
         this.input.keyboard.on('keydown_THREE', function (event) {
-            selectedWeapon = "portalGun";
+            selectedWeapon = weapons.PORTAL;
+            selectedWeaponText.setText('Weapon: ' + selectedWeapon);
         });
         var key4 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FOUR);
         this.input.keyboard.on('keydown_FOUR', function (event) {
-            selectedWeapon = "pikachu";
+            selectedWeapon = weapons.PIKACHU;
+            selectedWeaponText.setText('Weapon: ' + selectedWeapon);
         });
         var key5 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FIVE);
         this.input.keyboard.on('keydown_FIVE', function (event) {
-            selectedWeapon = "hiraishin";
+            selectedWeapon = weapons.HIRAISHIN;
+            selectedWeaponText.setText('Weapon: ' + selectedWeapon);
         });
-        //var key6 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SIX);
+        var key6 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SIX);
+        this.input.keyboard.on('keydown_SIX', function (event) {
+            selectedWeapon = weapons.BUBBLE;
+            selectedWeaponText.setText('Weapon: ' + selectedWeapon);
+        });
         //var key7 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SEVEN);
         //var key8 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.EIGHT);
 
@@ -116,10 +135,12 @@
         enemies = this.physics.add.group();
         enemies.defaultKey = 'enemy'
 
-        // Add score and health
+        // Add HUD elements
         scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#000' });
         playerHealthText = this.add.text(550, 16, 'Health: 100', { fontSize: '32px', fill: '#000' });
+        selectedWeaponText = this.add.text(16, 40, 'Weapon: ' + weapons.TELEPORTER, { fontSize: '32px', fill: '#000' });
 
+        // Event handlers
         // Spawn timer for the enemy
         var enemyCount;
         var waveSize = 20;
@@ -135,6 +156,7 @@
                     callbackScope: this
                 });
         }
+        // Click handler
     }
     
     function update()
@@ -190,18 +212,22 @@
 
         // Add clicker function
         e.setInteractive().on('pointerdown', function (pointer) {
-            health = e.getData('health');
-            health -= 50;
-            if (health <= 0)
+            console.log(selectedWeapon);
+            if (selectedWeapon == weapons.TELEPORTER)
             {
-                score += 10;
-                scoreText.setText('Score: ' + score);
-                e.disableBody(true, true);
+                health = e.getData('health');
+                health -= 100;
+                if (health <= 0)
+                {
+                    score += 10;
+                    scoreText.setText('Score: ' + score);
+                    e.disableBody(true, true);
+                }
+                e.setData('health', health);
+                // Bounce upon being clicked
+                //e.setGravityY(300);
+                //e.setVelocityY(-50);
             }
-            e.setData('health', health);
-            // Bounce upon being clicked
-            //e.setGravityY(300);
-            //e.setVelocityY(-50);
         });
     }
 
