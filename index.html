@@ -41,6 +41,8 @@
     var groundImage;
 
     var books;
+    var portals;
+    var portalBounds;
 
     var playerHealth = 100;
     var playerHealthText;
@@ -71,6 +73,8 @@
         this.load.image('wall', 'assets/wall.png');
         this.load.image('lane', 'assets/lane.png');
         this.load.image('book', 'assets/book.png');
+        this.load.image('portal_orange', 'assets/portal_orange.png');
+        this.load.image('portal_mask', 'assets/portal_mask.png');
     }
     
     function create()
@@ -155,7 +159,11 @@
         // Create weapon object groups
         books = this.physics.add.group();
         books.defaultKey = 'book';
-        this.physics.add.collider(enemies, books, hitBook, null, this);
+        
+        portals = this.physics.add.staticGroup();
+        portals.defaultKey = 'portal_orange';
+        portalBounds = this.physics.add.staticGroup();
+        portalBounds.defaultKey = 'wall';
         
         this.physics.add.collider(enemies, oopBounds, hitEnemyOOP, null, this);
         this.physics.add.collider(books, oopBounds, hitOOP, null, this);
@@ -185,7 +193,7 @@
             }
         }
         // Click handler
-        groundImage.setInteractive().on('pointerdown', spawnBook, this);
+        groundImage.setInteractive().on('pointerdown', activateWeaponOnGround, this);
     }
     
     function update()
@@ -223,10 +231,26 @@
 
     function hitBook(enemy, book)
     {
+        this.physics.world.removeCollider(enemy.getData('bookCollider'));
         enemy.setVelocity(-400, -400);
         enemy.setGravityY(300);
         book.setVelocityX(-150);
         book.setAngularVelocity(-360);
+    }
+
+    function hitPortal(enemy, portal)
+    {
+        // Let the enemy fall through its lane
+        this.physics.world.removeCollider(enemy.getData('laneCollider'));
+        enemy.setGravityY(300);
+        // Mask the enemy as it falls through the portal
+        enemy.mask = new Phaser.Display.Masks.BitmapMask(this, portal.getData('mask'));
+        enemy.mask.invertAlpha = true;
+        // Add bounds to enemy as it falls through the portal to prevent clipping through ground
+        this.physics.add.collider(enemy, portal.getData('boundLeft'));
+        this.physics.add.collider(enemy, portal.getData('boundRight'));
+        // Prevent the enemy from colliding from other portals and resetting its mask
+        this.physics.world.removeCollider(enemy.getData('portalCollider'));
     }
 
     function spawnEnemy()
@@ -240,6 +264,8 @@
         var e = enemies.create();
         e.x = 0;
         e.y = l.y - l.height/2 - e.height/2;
+        e.setData('startX', e.x);
+        e.setData('startY', e.y);
 
         // Choose a random walk speed for the enemy
         var speed = Phaser.Math.Between(100, 200);
@@ -247,15 +273,24 @@
         e.setVelocityX(speed);
 
         // Add collider between the enemy and its respective lane
-        e.setData('lane', l);
-        this.physics.add.collider(e, l, landOnGround, null, this);
+        var laneCollider = this.physics.add.collider(e, l, landOnGround, null, this);
+        e.setData('laneCollider', laneCollider);
 
         // Add collider between the enemy and its respective wall
-        e.setData('wall', w);
-        this.physics.add.collider(e, w, hitWall, null, this);
+        var wallCollider = this.physics.add.collider(e, w, hitWall, null, this);
+        e.setData('wallCollider', wallCollider);
+
+        // Add collider between the enemy and any books
+        var bookCollider = this.physics.add.collider(e, books, hitBook, null, this);
+        e.setData('bookCollider', bookCollider);
+        var portalCollider = this.physics.add.overlap(e, portals, hitPortal, null, this);
+        e.setData('portalCollider', portalCollider);
 
         // Add enemy health
         e.setData('health', 100);
+
+        // Make enemies always on top of ground level
+        e.depth = groundImage.depth + 3;
 
         // Add clicker function
         e.setInteractive().on('pointerdown', function (pointer) {
@@ -281,6 +316,7 @@
         score += 10;
         scoreText.setText('Score: ' + score);
         enemy.disableBody(true, true);
+        enemy.removeInteractive();
     }
 
     // Reset motion for enemies once they land back on the ground
@@ -290,8 +326,8 @@
         enemy.setGravityY(0);
     }
 
-    // Handle weapon actions when mouse is clicked
-    function spawnBook()
+    // Handle weapon actions when mouse is clicked on the ground
+    function activateWeaponOnGround()
     {
         if (selectedWeapon == weapons.BOOK)
         {
@@ -299,17 +335,46 @@
             // Use wall x-position to be the book spawn x-position
             var pointerY = this.input.activePointer.y;
             // Subtract first lane position divided by lane increments
-            var laneIndex = Phaser.Math.RoundTo((pointerY - 300) / 5, 0);
+            var laneIndex = Phaser.Math.RoundTo(
+                (pointerY - lanes.children.entries[0].y) / 
+                (lanes.children.entries[1].y - lanes.children.entries[0].y), 
+                0);
 
             var b = books.create();
-            // TODO Fragile: x-position calculation works only because
-            // lane and wall indexes currently have a 1-1 correspondence
             console.log(laneIndex);
             b.x = walls.children.entries[laneIndex].x;
             b.y = pointerY;
+            // TODO Currently the rotation only affects the GameObject but not the hitbox. This might be OK
             b.setVelocityX(-200);
             b.setAngularVelocity(-360);
             b.setScale(0.5);
+        }
+        else if (selectedWeapon == weapons.PORTAL)
+        {
+            // TODO If portal size clips outside the ground boundaries,
+            // relocate it away from the actual pointer position to something else
+            var p = portals.create(this.input.activePointer.x, this.input.activePointer.y);
+            // TODO Shape portal hitbox size and location based on enemy size
+            // Currently hardcoding enemy size as 30x30px
+            p.body.setSize(p.body.width - 60, 5);
+            p.body.setOffset(30, -5);
+            p.depth = groundImage.depth;
+            // TODO Remove hardcode for portal mask offset
+            var mask = this.make.image({
+                x: p.x,
+                y: p.y + 150,
+                key: 'portal_mask',
+                add: false
+            });
+            p.setData('mask', mask);
+
+            // Set bounds on the portal to constrain enemies once they've been caught
+            var pbLeft = portalBounds.create(p.x - p.width/2, p.y);
+            pbLeft.visible = false;
+            p.setData('boundLeft', pbLeft);
+            var pbRight = portalBounds.create(p.x + p.width/2, p.y);
+            pbRight.visible = false;
+            p.setData('boundRight', pbRight);
         }
     }
 </script>
