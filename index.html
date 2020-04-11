@@ -41,8 +41,9 @@
     var score = 0;
     var scoreText;
     var gameOverText;
-    var spawnTimer;
-    
+    //var spawnTimer;
+    var selectedWeapon = "teleporter";
+
     var game = new Phaser.Game(config);
     
     function preload()
@@ -64,6 +65,33 @@
         this.add.image(400, 450, 'ground');
         this.add.image(400, 300, 'ocean');
 
+        // Register keyboard inputs
+        // Create key objects, which are emitOnce by default.
+        // Then create listener event for the key input, which because of the created Key should only fire once.
+        var key1 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE);
+        this.input.keyboard.on('keydown_ONE', function (event) {
+            selectedWeapon = "teleporter";
+        });
+        var key2 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TWO);
+        this.input.keyboard.on('keydown_TWO', function (event) {
+            selectedWeapon = "education";
+        });
+        var key3 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.THREE);
+        this.input.keyboard.on('keydown_THREE', function (event) {
+            selectedWeapon = "portalGun";
+        });
+        var key4 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FOUR);
+        this.input.keyboard.on('keydown_FOUR', function (event) {
+            selectedWeapon = "pikachu";
+        });
+        var key5 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FIVE);
+        this.input.keyboard.on('keydown_FIVE', function (event) {
+            selectedWeapon = "hiraishin";
+        });
+        //var key6 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SIX);
+        //var key7 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SEVEN);
+        //var key8 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.EIGHT);
+
         // Instantiate physics objects
 
         // Create lanes
@@ -74,14 +102,15 @@
             visible: false
         });
 
-        // Create wall group
+        // Create walls
         walls = this.physics.add.staticGroup({
             key: 'wall',
             repeat: 60,
             setXY: { x: 500, y: 300, stepX: 3 },
             visible: false
         });
-
+        walls.children.entries[0].visible = true;
+        walls.children.entries[60].visible = true;
 
         // Create enemies
         enemies = this.physics.add.group();
@@ -91,17 +120,21 @@
         scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#000' });
         playerHealthText = this.add.text(550, 16, 'Health: 100', { fontSize: '32px', fill: '#000' });
 
-        // Add collider between all enemies and wall
-        //this.physics.add.collider(enemies, wall, hitWall, null, this);
-
         // Spawn timer for the enemy
-        spawnTimer = this.time.addEvent(
-            { 
-                delay: Phaser.Math.Between(100, 2000),
-                repeat: 19,
-                callback: spawnEnemy,
-                callbackScope: this
-            });
+        var enemyCount;
+        var waveSize = 20;
+        for (enemyCount = 0; enemyCount < waveSize; enemyCount++)
+        {
+            // Basically the wave will last from 1 to 20 seconds
+            // Enemies will be distributed across this time
+            var spawnDelay = Phaser.Math.Between(1000, 20000);
+            this.time.addEvent(
+                { 
+                    delay: spawnDelay,
+                    callback: spawnEnemy,
+                    callbackScope: this
+                });
+        }
     }
     
     function update()
@@ -119,6 +152,7 @@
         if (playerHealth <= 0)
         {
             gameOverText = this.add.text(325, 300, 'GAME OVER', { fontSize: '50px', fill: '#000' });
+            // Clean up enemies upon game over and stop spawning enemies
             //spawnTimer.remove();
             //enemies.children.iterate(function (child) {
             //    child.disableBody(true, true);
@@ -165,17 +199,18 @@
                 e.disableBody(true, true);
             }
             e.setData('health', health);
-            e.setGravityY(300);
-            e.setVelocityY(-300);
+            // Bounce upon being clicked
+            //e.setGravityY(300);
+            //e.setVelocityY(-50);
         });
     }
 
+    // Reset motion for enemies once they land back on the ground
     function landOnGround(enemy, ground)
     {
         enemy.setVelocityX(enemy.getData('speed'));
         enemy.setGravityY(0);
     }
-
 </script>
 
 </body>
