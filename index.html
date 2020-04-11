@@ -33,9 +33,15 @@
     };
     
     var enemies;
-    var ground;
+    var enableEnemySpawn = true;
+
     var walls;
     var lanes;
+
+    var groundImage;
+
+    var books;
+
     var playerHealth = 100;
     var playerHealthText;
     var score = 0;
@@ -72,7 +78,7 @@
         // Add background elements
         this.add.image(400, 300, 'sky');
         this.add.image(600, 100, 'sun').setScale(0.5);
-        this.add.image(400, 450, 'ground');
+        groundImage = this.add.image(400, 450, 'ground');
         this.add.image(400, 300, 'ocean');
 
         // Register keyboard inputs
@@ -133,7 +139,26 @@
 
         // Create enemies
         enemies = this.physics.add.group();
-        enemies.defaultKey = 'enemy'
+        enemies.defaultKey = 'enemy';
+
+        // Create out-of-play bounds (remove enemies once they hit this)
+        oopBounds = this.physics.add.staticGroup();
+        var oopLeft = oopBounds.create(-100, 300, 'wall');
+        oopLeft.setScale(2);
+        var oopRight = oopBounds.create(900, 300, 'wall');
+        oopRight.setScale(2);
+        var oopTop = oopBounds.create(400, -100, 'lane');
+        oopTop.setScale(2);
+        var oopBottom = oopBounds.create(400, 700, 'lane');
+        oopBottom.setScale(2);
+
+        // Create weapon object groups
+        books = this.physics.add.group();
+        books.defaultKey = 'book';
+        this.physics.add.collider(enemies, books, hitBook, null, this);
+        
+        this.physics.add.collider(enemies, oopBounds, hitEnemyOOP, null, this);
+        this.physics.add.collider(books, oopBounds, hitOOP, null, this);
 
         // Add HUD elements
         scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#000' });
@@ -144,19 +169,23 @@
         // Spawn timer for the enemy
         var enemyCount;
         var waveSize = 20;
-        for (enemyCount = 0; enemyCount < waveSize; enemyCount++)
+        if (enableEnemySpawn)
         {
-            // Basically the wave will last from 1 to 20 seconds
-            // Enemies will be distributed across this time
-            var spawnDelay = Phaser.Math.Between(1000, 20000);
-            this.time.addEvent(
-                { 
-                    delay: spawnDelay,
-                    callback: spawnEnemy,
-                    callbackScope: this
-                });
+            for (enemyCount = 0; enemyCount < waveSize; enemyCount++)
+            {
+                // Spawn delay essentially determines how long the wave will last
+                // Enemies will be distributed across this time
+                var spawnDelay = Phaser.Math.Between(100, 10000);
+                this.time.addEvent(
+                    { 
+                        delay: spawnDelay,
+                        callback: spawnEnemy,
+                        callbackScope: this
+                    });
+            }
         }
         // Click handler
+        groundImage.setInteractive().on('pointerdown', spawnBook, this);
     }
     
     function update()
@@ -180,6 +209,24 @@
             //    child.disableBody(true, true);
             //});
         }
+    }
+
+    function hitOOP(obj, oop)
+    {
+        obj.disableBody(true, true);
+    }
+
+    function hitEnemyOOP(enemy, oop)
+    {
+        recordEnemyKill(enemy);
+    }
+
+    function hitBook(enemy, book)
+    {
+        enemy.setVelocity(-400, -400);
+        enemy.setGravityY(300);
+        book.setVelocityX(-150);
+        book.setAngularVelocity(-360);
     }
 
     function spawnEnemy()
@@ -219,9 +266,7 @@
                 health -= 100;
                 if (health <= 0)
                 {
-                    score += 10;
-                    scoreText.setText('Score: ' + score);
-                    e.disableBody(true, true);
+                    recordEnemyKill(e);
                 }
                 e.setData('health', health);
                 // Bounce upon being clicked
@@ -231,11 +276,41 @@
         });
     }
 
+    function recordEnemyKill(enemy)
+    {
+        score += 10;
+        scoreText.setText('Score: ' + score);
+        enemy.disableBody(true, true);
+    }
+
     // Reset motion for enemies once they land back on the ground
     function landOnGround(enemy, ground)
     {
         enemy.setVelocityX(enemy.getData('speed'));
         enemy.setGravityY(0);
+    }
+
+    // Handle weapon actions when mouse is clicked
+    function spawnBook()
+    {
+        if (selectedWeapon == weapons.BOOK)
+        {
+            // Map the y-position to lane, find the corresponding wall
+            // Use wall x-position to be the book spawn x-position
+            var pointerY = this.input.activePointer.y;
+            // Subtract first lane position divided by lane increments
+            var laneIndex = Phaser.Math.RoundTo((pointerY - 300) / 5, 0);
+
+            var b = books.create();
+            // TODO Fragile: x-position calculation works only because
+            // lane and wall indexes currently have a 1-1 correspondence
+            console.log(laneIndex);
+            b.x = walls.children.entries[laneIndex].x;
+            b.y = pointerY;
+            b.setVelocityX(-200);
+            b.setAngularVelocity(-360);
+            b.setScale(0.5);
+        }
     }
 </script>
 
