@@ -672,6 +672,8 @@
 
     function closePortal(portal)
     {
+        portalBounds.remove(portal.getData('boundLeft'), true, true);
+        portalBounds.remove(portal.getData('boundRight'), true, true);
         portals.remove(portal, true, true);
     }
 
