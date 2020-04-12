@@ -7,7 +7,7 @@
     <style type="text/css">
         body {
             margin: 0;
-        }
+
     </style>
 </head>
 <body>
@@ -22,7 +22,7 @@
         physics: {
             default: 'arcade',
             arcade: {
-                debug: false
+                debug: true
             }
         },
         scene: {
@@ -65,10 +65,13 @@
     }
     var selectedWeapon = weapons.TELEPORTER;
     var selectedWeaponText;
+    // Books
     var books;
+    // Portals
     var portals;
     var portalBounds;
     var portalDuration = 5000;
+    // Pikachu
     var pikachuPointer;
     var thunderAnimation;
     var thunderHitBox;
@@ -81,7 +84,10 @@
     var chargeDelay = 500;
     var pikachuCooldown = 1000;
     var pikachuPointerDefaultAlpha = 0.5;
-
+    // Bubbles
+    var bubblePointer;
+    var bubblePointerDefaultAlpha = 0.5;
+    var bubbleActivated = false;
 
     var game = new Phaser.Game(config);
     
@@ -110,6 +116,12 @@
             endFrame: 5
         });
         this.load.image('thunderHitBox', 'assets/thunderHitBox.png');
+        this.load.spritesheet('bubblePointer', 'assets/bubble_spritesheet.png', {
+            frameWidth: 20,
+            frameHeight: 20,
+            startFrame: 0,
+            endFrame: 3
+        });
     }
     
     function create()
@@ -120,6 +132,7 @@
         groundImage = this.add.image(400, 450, 'ground');
         this.add.image(400, 300, 'ocean');
 
+        // Pointers
         pikachuPointer = this.add.sprite(400, 300, 'pikachu');
         pikachuPointer.alpha = pikachuPointerDefaultAlpha;
         pikachuPointer.visible = false;
@@ -149,6 +162,21 @@
             frameRate: 10,
             repeat: 2
         });
+        bubblePointer = this.physics.add.sprite(400, 300, 'bubblePointer', 0);
+        bubblePointer.alpha = bubblePointerDefaultAlpha;
+        bubblePointer.depth = groundImage.depth + depths.POINTER;
+        this.anims.create({
+            key: 'idleBubble',
+            frames: [ { key: 'bubblePointer', frame: 0 } ],
+            frameRate: 20
+        });
+        this.anims.create({
+            key: 'activeBubble',
+            frames: this.anims.generateFrameNumbers('bubblePointer', { start: 0, end: 3 }),
+            frameRate: 10,
+            repeat: -1
+        });
+        bubblePointer.disableBody(true, true);
 
         // Register keyboard inputs
         // Create key objects, which are emitOnce by default.
@@ -185,6 +213,10 @@
         });
         //var key7 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SEVEN);
         //var key8 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.EIGHT);
+
+        var reloadKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
+        this.input.keyboard.on('keydown_R', function (event) {
+        });
 
         // Instantiate physics objects
 
@@ -236,10 +268,9 @@
 
         thunderHitBox = this.physics.add.staticGroup();
         thunderHitBox.defaultKey = 'thunderHitBox';
-        
+
         this.physics.add.collider(enemies, oopBounds, hitEnemyOOP, null, this);
         this.physics.add.collider(books, oopBounds, hitOOP, null, this);
-        //this.physics.add.overlap(enemies, thunderHitBox, hitThunder, null, this);
 
         // Add HUD elements
         scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#000' });
@@ -276,29 +307,34 @@
             spawnEnemy.call(this, true, 50, 10);
             spawnEnemy.call(this, true, 50, 20);
         }
-        // Ground event listeners
+        // Pointer event listeners
         groundImage.setInteractive().on('pointerdown', activateWeaponOnGround, this);
         groundImage.setInteractive().on('pointerup', releaseWeaponOnGround, this);
+        this.input.on('pointerdown', activateWeapon, this);
+        this.input.on('pointerup', releaseWeapon, this);
         // TODO Currently will only update image if the pointer moves
         // If the weapon is switched but the pointer isn't moved, the pointer is unchanged until it does
         // We can add a step to update the image in the weapon selection logic as well
-        groundImage.setInteractive().on('pointermove', function (pointer) {
+        // TODO Maybe create a pointer object that contains all the pointers for each weapon
+        // And instead of an if-else statement just index based on the weapons enum
+        this.input.on('pointermove', function (pointer) {
+
+            pikachuPointer.visible = (selectedWeapon == weapons.PIKACHU);
+            bubblePointer.visible = (selectedWeapon == weapons.BUBBLE);
             if (selectedWeapon == weapons.PIKACHU)
             {
-                pikachuPointer.visible = true;
-                pikachuPointer.x = pointer.x;
-                pikachuPointer.y = pointer.y;
+                pikachuPointer.setPosition(pointer.x, pointer.y);
             }
-            else
+            else if (selectedWeapon == weapons.BUBBLE)
             {
-                pikachuPointer.visible = false;
+                bubblePointer.setPosition(pointer.x, pointer.y);
             }
         });
     }
     
     function update()
     {
-        if (isChargingThunder && selectedWeapon == weapons.PIKACHU)
+        if (selectedWeapon == weapons.PIKACHU && isChargingThunder)
         {
             if (chargePercentage < 100 && !chargeLock)
             {
@@ -387,13 +423,7 @@
     {
         if (Phaser.Math.Between(0, 100) < THUNDER_ACCURACY)
         {
-            // Remove all colliders
-            this.physics.world.removeCollider(enemy.getData('laneCollider'));
-            this.physics.world.removeCollider(enemy.getData('wallCollider'));
-            this.physics.world.removeCollider(enemy.getData('bookCollider'));
-            this.physics.world.removeCollider(enemy.getData('portalCollider'));
-            this.physics.world.removeCollider(enemy.getData('thunderCollider'));
-
+            removeAllCollidersFromEnemy.call(this, enemy);
             var blastMagnitude = 100 / (enemy.x - thunder.x);
             console.log("blastMagnitude: " + blastMagnitude);
             enemy.setVelocity(50 * blastMagnitude, -250 * Math.abs(blastMagnitude))
@@ -406,6 +436,12 @@
                 scaleY: 0.01
             });
         }
+    }
+
+    function hitBubble(enemy, bubble)
+    {
+        removeAllCollidersFromEnemy.call(this, enemy);
+        enemy.setVelocityY(-100);
     }
 
     function spawnEnemy(debug, index, speed)
@@ -448,6 +484,8 @@
         e.setData('portalCollider', portalCollider);
         var thunderCollider = this.physics.add.overlap(e, thunderHitBox, hitThunder, null, this);
         e.setData('thunderCollider', thunderCollider);
+        var bubbleCollider = this.physics.add.overlap(e, bubblePointer, hitBubble, null, this);
+        e.setData('bubbleCollider', bubbleCollider);
 
         // Add enemy health
         e.setData('health', 100);
@@ -457,7 +495,6 @@
 
         // Add clicker function
         e.setInteractive().on('pointerdown', function (pointer) {
-            console.log(selectedWeapon);
             if (selectedWeapon == weapons.TELEPORTER)
             {
                 health = e.getData('health');
@@ -545,29 +582,59 @@
                 args: [p]
             });
         }
-        else if (selectedWeapon == weapons.PIKACHU)
+    }
+
+    function activateWeapon()
+    {
+        if (selectedWeapon == weapons.PIKACHU)
         {
             if (allowCharge)
             {
+                console.log("Pikachu activate");
                 isChargingThunder = true;
                 chargePercentage = 0;
                 pikachuPointer.anims.play('chargeThunder');
             }
         }
+        else if (selectedWeapon == weapons.BUBBLE)
+        {
+            bubbleActivated = true;
+            bubblePointer.enableBody(
+                true,
+                this.input.activePointer.x,
+                this.input.activePointer.y,
+                true,
+                true);
+            bubblePointer.anims.play('activeBubble');
+        }
     }
-   
+
     function releaseWeaponOnGround()
+    {
+    }
+
+    function releaseWeapon()
     {
         if (selectedWeapon == weapons.PIKACHU && isChargingThunder)
         {
+            console.log("Pikachu release");
             isChargingThunder = false;
             allowCharge = false;
             pikachuPointer.anims.play('useThunder');
 
+            var releasedOnGround = this.input.activePointer.y > (groundImage.y - groundImage.height/2);
             thunderAnimation.setScale(1 + chargePercentage / 100, 1 + chargePercentage / 100);
             thunderAnimation.x = this.input.activePointer.x;
-            thunderAnimation.y = this.input.activePointer.y - 
-                (thunderAnimation.height * thunderAnimation.scaleY)/2;
+            if (releasedOnGround)
+            {
+                thunderAnimation.y = this.input.activePointer.y - 
+                    (thunderAnimation.height * thunderAnimation.scaleY)/2;
+            }
+            else
+            {
+                thunderAnimation.y = groundImage.y - groundImage.height/2 -
+                    (thunderAnimation.height * thunderAnimation.scaleY)/2;
+            }
             thunderAnimation.visible = true;
             thunderAnimation.anims.play('thunderbolt');
             this.time.addEvent({
@@ -576,7 +643,16 @@
                 callbackScope: this
             });
 
-            var hitBox = thunderHitBox.create(this.input.activePointer.x, this.input.activePointer.y);
+            var hitBox = thunderHitBox.create();
+            hitBox.x = this.input.activePointer.x;
+            if (releasedOnGround)
+            {
+                hitBox.y = this.input.activePointer.y;
+            }
+            else
+            {
+                hitBox.y = groundImage.y - groundImage.height/2;
+            }
             hitBox.setScale(1 + chargePercentage / 25, 1 + chargePercentage / 25);
             hitBox.body.updateFromGameObject();
             hitBox.visible = true;
@@ -585,6 +661,12 @@
                 callback: clearThunderHitBox,
                 args: [hitBox]
             });
+        }
+        else if (selectedWeapon == weapons.BUBBLE)
+        {
+            bubbleActivated = false;
+            bubblePointer.anims.play('idleBubble');
+            bubblePointer.disableBody(true, true);
         }
     }
 
@@ -597,6 +679,17 @@
     {
         thunderHitBox.remove(hitbox, true, true);
     }
+
+    function removeAllCollidersFromEnemy(enemy)
+    {
+        this.physics.world.removeCollider(enemy.getData('laneCollider'));
+        this.physics.world.removeCollider(enemy.getData('wallCollider'));
+        this.physics.world.removeCollider(enemy.getData('bookCollider'));
+        this.physics.world.removeCollider(enemy.getData('portalCollider'));
+        this.physics.world.removeCollider(enemy.getData('thunderCollider'));
+        this.physics.world.removeCollider(enemy.getData('bubbleCollider'));
+    }
+
 </script>
 
 </body>
