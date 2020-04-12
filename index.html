@@ -31,25 +31,30 @@
             update: update
         }
     };
+
+    const depths = {
+        GROUND: 0,
+        BELOW_ENEMY: 1,
+        ENEMY: 2,
+        ABOVE_ENEMY: 3,
+        POINTER: 4
+    };
     
     var enemies;
-    var enableEnemySpawn = true;
+    var debugWave = true;
 
     var walls;
     var lanes;
 
     var groundImage;
 
-    var books;
-    var portals;
-    var portalBounds;
-
     var playerHealth = 100;
     var playerHealthText;
     var score = 0;
     var scoreText;
     var gameOverText;
-    //var spawnTimer;
+
+    // Weapons
     const weapons = {
         BOOK: 'book',
         BUBBLE: 'bubble',
@@ -60,6 +65,23 @@
     }
     var selectedWeapon = weapons.TELEPORTER;
     var selectedWeaponText;
+    var books;
+    var portals;
+    var portalBounds;
+    var portalDuration = 5000;
+    var pikachuPointer;
+    var thunderAnimation;
+    var thunderHitBox;
+    const THUNDER_ACCURACY = 70;
+    var allowCharge = true;
+    var isChargingThunder = false;
+    var chargePercentage = 0;
+    var chargeIncrement = 10;
+    var chargeLock = false;
+    var chargeDelay = 500;
+    var pikachuCooldown = 1000;
+    var pikachuPointerDefaultAlpha = 0.5;
+
 
     var game = new Phaser.Game(config);
     
@@ -75,6 +97,19 @@
         this.load.image('book', 'assets/book.png');
         this.load.image('portal_orange', 'assets/portal_orange.png');
         this.load.image('portal_mask', 'assets/portal_mask.png');
+        this.load.spritesheet('pikachu', 'assets/pikachu_spritesheet.png', { 
+            frameWidth: 42,
+            frameHeight: 60,
+            startFrame: 0,
+            endFrame: 3
+        });
+        this.load.spritesheet('thunder', 'assets/thunder_spritesheet2.png', {
+            frameWidth: 110,
+            frameHeight: 230,
+            startFrame: 0,
+            endFrame: 5
+        });
+        this.load.image('thunderHitBox', 'assets/thunderHitBox.png');
     }
     
     function create()
@@ -84,6 +119,36 @@
         this.add.image(600, 100, 'sun').setScale(0.5);
         groundImage = this.add.image(400, 450, 'ground');
         this.add.image(400, 300, 'ocean');
+
+        pikachuPointer = this.add.sprite(400, 300, 'pikachu');
+        pikachuPointer.alpha = pikachuPointerDefaultAlpha;
+        pikachuPointer.visible = false;
+        pikachuPointer.depth = groundImage.depth + depths.POINTER;
+        this.anims.create({
+            key: 'idlePika',
+            frames: [ { key: 'pikachu', frame: 0 } ],
+            frameRate: 20,
+        });
+        this.anims.create({
+            key: 'chargeThunder',
+            frames: this.anims.generateFrameNumbers('pikachu', { start: 1, end: 2 }),
+            frameRate: 5,
+            repeat: -1
+        });
+        this.anims.create({
+            key: 'useThunder',
+            frames: [ { key: 'pikachu', frame: 3 } ],
+            frameRate: 20,
+        });
+        thunderAnimation = this.add.sprite(400, 300, 'thunder');
+        thunderAnimation.visible = false;
+        thunderAnimation.depth = groundImage.depth + depths.ABOVE_ENEMY;
+        this.anims.create({
+            key: 'thunderbolt',
+            frames: this.anims.generateFrameNumbers('thunder', { start: 0, end: 4 }),
+            frameRate: 10,
+            repeat: 2
+        });
 
         // Register keyboard inputs
         // Create key objects, which are emitOnce by default.
@@ -149,12 +214,16 @@
         oopBounds = this.physics.add.staticGroup();
         var oopLeft = oopBounds.create(-100, 300, 'wall');
         oopLeft.setScale(2);
+        oopLeft.body.updateFromGameObject();
         var oopRight = oopBounds.create(900, 300, 'wall');
         oopRight.setScale(2);
+        oopRight.body.updateFromGameObject();
         var oopTop = oopBounds.create(400, -100, 'lane');
         oopTop.setScale(2);
+        oopTop.body.updateFromGameObject();
         var oopBottom = oopBounds.create(400, 700, 'lane');
         oopBottom.setScale(2);
+        oopBottom.body.updateFromGameObject();
 
         // Create weapon object groups
         books = this.physics.add.group();
@@ -164,9 +233,13 @@
         portals.defaultKey = 'portal_orange';
         portalBounds = this.physics.add.staticGroup();
         portalBounds.defaultKey = 'wall';
+
+        thunderHitBox = this.physics.add.staticGroup();
+        thunderHitBox.defaultKey = 'thunderHitBox';
         
         this.physics.add.collider(enemies, oopBounds, hitEnemyOOP, null, this);
         this.physics.add.collider(books, oopBounds, hitOOP, null, this);
+        //this.physics.add.overlap(enemies, thunderHitBox, hitThunder, null, this);
 
         // Add HUD elements
         scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#000' });
@@ -177,13 +250,13 @@
         // Spawn timer for the enemy
         var enemyCount;
         var waveSize = 20;
-        if (enableEnemySpawn)
+        if (!debugWave)
         {
             for (enemyCount = 0; enemyCount < waveSize; enemyCount++)
             {
                 // Spawn delay essentially determines how long the wave will last
                 // Enemies will be distributed across this time
-                var spawnDelay = Phaser.Math.Between(100, 10000);
+                var spawnDelay = Phaser.Math.Between(100, 1000);
                 this.time.addEvent(
                     { 
                         delay: spawnDelay,
@@ -192,12 +265,69 @@
                     });
             }
         }
-        // Click handler
+        else
+        {
+            spawnEnemy.call(this, true, 20, 10);
+            spawnEnemy.call(this, true, 20, 20);
+            spawnEnemy.call(this, true, 30, 10);
+            spawnEnemy.call(this, true, 30, 20);
+            spawnEnemy.call(this, true, 40, 10);
+            spawnEnemy.call(this, true, 40, 20);
+            spawnEnemy.call(this, true, 50, 10);
+            spawnEnemy.call(this, true, 50, 20);
+        }
+        // Ground event listeners
         groundImage.setInteractive().on('pointerdown', activateWeaponOnGround, this);
+        groundImage.setInteractive().on('pointerup', releaseWeaponOnGround, this);
+        // TODO Currently will only update image if the pointer moves
+        // If the weapon is switched but the pointer isn't moved, the pointer is unchanged until it does
+        // We can add a step to update the image in the weapon selection logic as well
+        groundImage.setInteractive().on('pointermove', function (pointer) {
+            if (selectedWeapon == weapons.PIKACHU)
+            {
+                pikachuPointer.visible = true;
+                pikachuPointer.x = pointer.x;
+                pikachuPointer.y = pointer.y;
+            }
+            else
+            {
+                pikachuPointer.visible = false;
+            }
+        });
     }
     
     function update()
     {
+        if (isChargingThunder && selectedWeapon == weapons.PIKACHU)
+        {
+            if (chargePercentage < 100 && !chargeLock)
+            {
+                console.log("add charge event");
+                chargeLock = true;
+                this.time.addEvent({
+                    delay: chargeDelay,
+                    callback: increaseCharge,
+                    callbackScope: this
+                });
+            }
+            pikachuPointer.alpha = pikachuPointerDefaultAlpha + 
+                (1 - pikachuPointerDefaultAlpha) * (chargePercentage / 100);
+        }
+    }
+
+    function increaseCharge()
+    {
+        chargePercentage += chargeIncrement;
+        chargeLock = false;
+        console.log("increase charge: " + chargePercentage);
+    }
+
+    function resetPikachu()
+    {
+        pikachuPointer.alpha = pikachuPointerDefaultAlpha;
+        pikachuPointer.anims.play('idlePika');
+        thunderAnimation.visible = false;
+        allowCharge = true;
     }
 
     function hitWall(enemy, wall)
@@ -249,14 +379,42 @@
         // Add bounds to enemy as it falls through the portal to prevent clipping through ground
         this.physics.add.collider(enemy, portal.getData('boundLeft'));
         this.physics.add.collider(enemy, portal.getData('boundRight'));
-        // Prevent the enemy from colliding from other portals and resetting its mask
+        // Prevent the enemy from colliding with other portals and resetting its mask
         this.physics.world.removeCollider(enemy.getData('portalCollider'));
     }
 
-    function spawnEnemy()
+    function hitThunder(enemy, thunder)
+    {
+        if (Phaser.Math.Between(0, 100) < THUNDER_ACCURACY)
+        {
+            // Remove all colliders
+            this.physics.world.removeCollider(enemy.getData('laneCollider'));
+            this.physics.world.removeCollider(enemy.getData('wallCollider'));
+            this.physics.world.removeCollider(enemy.getData('bookCollider'));
+            this.physics.world.removeCollider(enemy.getData('portalCollider'));
+            this.physics.world.removeCollider(enemy.getData('thunderCollider'));
+
+            var blastMagnitude = 100 / (enemy.x - thunder.x);
+            console.log("blastMagnitude: " + blastMagnitude);
+            enemy.setVelocity(50 * blastMagnitude, -250 * Math.abs(blastMagnitude))
+            enemy.setAngularVelocity(-360);
+            enemy.setGravityY(300);
+            this.tweens.add({
+                targets: enemy,
+                duration: 1000,
+                scaleX: 0.01,
+                scaleY: 0.01
+            });
+        }
+    }
+
+    function spawnEnemy(debug, index, speed)
     {
         // Choose a random lane/wall for this enemy
-        var index = Phaser.Math.Between(0, 59);
+        if (!debug)
+        {
+            index = Phaser.Math.Between(0, 59);
+        }
         var l = lanes.children.entries[index];
         var w = walls.children.entries[index];
 
@@ -268,7 +426,10 @@
         e.setData('startY', e.y);
 
         // Choose a random walk speed for the enemy
-        var speed = Phaser.Math.Between(100, 200);
+        if (!debug)
+        {
+            speed = Phaser.Math.Between(100, 200);
+        }
         e.setData('speed', speed);
         e.setVelocityX(speed);
 
@@ -280,17 +441,19 @@
         var wallCollider = this.physics.add.collider(e, w, hitWall, null, this);
         e.setData('wallCollider', wallCollider);
 
-        // Add collider between the enemy and any books
+        // Add collider between the enemy and weapons
         var bookCollider = this.physics.add.collider(e, books, hitBook, null, this);
         e.setData('bookCollider', bookCollider);
         var portalCollider = this.physics.add.overlap(e, portals, hitPortal, null, this);
         e.setData('portalCollider', portalCollider);
+        var thunderCollider = this.physics.add.overlap(e, thunderHitBox, hitThunder, null, this);
+        e.setData('thunderCollider', thunderCollider);
 
         // Add enemy health
         e.setData('health', 100);
 
         // Make enemies always on top of ground level
-        e.depth = groundImage.depth + 3;
+        e.depth = groundImage.depth + depths.ENEMY;
 
         // Add clicker function
         e.setInteractive().on('pointerdown', function (pointer) {
@@ -358,7 +521,7 @@
             // Currently hardcoding enemy size as 30x30px
             p.body.setSize(p.body.width - 60, 5);
             p.body.setOffset(30, -5);
-            p.depth = groundImage.depth;
+            p.depth = groundImage.depth + depths.GROUND;
             // TODO Remove hardcode for portal mask offset
             var mask = this.make.image({
                 x: p.x,
@@ -375,7 +538,64 @@
             var pbRight = portalBounds.create(p.x + p.width/2, p.y);
             pbRight.visible = false;
             p.setData('boundRight', pbRight);
+
+            this.time.addEvent({
+                delay: portalDuration,
+                callback: closePortal,
+                args: [p]
+            });
         }
+        else if (selectedWeapon == weapons.PIKACHU)
+        {
+            if (allowCharge)
+            {
+                isChargingThunder = true;
+                chargePercentage = 0;
+                pikachuPointer.anims.play('chargeThunder');
+            }
+        }
+    }
+   
+    function releaseWeaponOnGround()
+    {
+        if (selectedWeapon == weapons.PIKACHU && isChargingThunder)
+        {
+            isChargingThunder = false;
+            allowCharge = false;
+            pikachuPointer.anims.play('useThunder');
+
+            thunderAnimation.setScale(1 + chargePercentage / 100, 1 + chargePercentage / 100);
+            thunderAnimation.x = this.input.activePointer.x;
+            thunderAnimation.y = this.input.activePointer.y - 
+                (thunderAnimation.height * thunderAnimation.scaleY)/2;
+            thunderAnimation.visible = true;
+            thunderAnimation.anims.play('thunderbolt');
+            this.time.addEvent({
+                delay: pikachuCooldown,
+                callback: resetPikachu,
+                callbackScope: this
+            });
+
+            var hitBox = thunderHitBox.create(this.input.activePointer.x, this.input.activePointer.y);
+            hitBox.setScale(1 + chargePercentage / 25, 1 + chargePercentage / 25);
+            hitBox.body.updateFromGameObject();
+            hitBox.visible = true;
+            this.time.addEvent({
+                delay: 100,
+                callback: clearThunderHitBox,
+                args: [hitBox]
+            });
+        }
+    }
+
+    function closePortal(portal)
+    {
+        portals.remove(portal, true, true);
+    }
+
+    function clearThunderHitBox(hitbox)
+    {
+        thunderHitBox.remove(hitbox, true, true);
     }
 </script>
 
