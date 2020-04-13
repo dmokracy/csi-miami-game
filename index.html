@@ -45,6 +45,7 @@
 
     var walls;
     var lanes;
+    const NUM_LANE_WALL = 60;
 
     var groundImage;
 
@@ -258,7 +259,7 @@
         // Create lanes
         lanes = this.physics.add.staticGroup({
             key: 'lane',
-            repeat: 60,
+            repeat: NUM_LANE_WALL - 1,
             setXY: { x: 400, y: 300, stepY: 5 },
             visible: false
         });
@@ -266,16 +267,18 @@
         // Create walls
         walls = this.physics.add.staticGroup({
             key: 'wall',
-            repeat: 60,
+            repeat: NUM_LANE_WALL - 1,
             setXY: { x: 500, y: 300, stepX: 3 },
             visible: false
         });
         walls.children.entries[0].visible = true;
-        walls.children.entries[60].visible = true;
+        walls.children.entries[NUM_LANE_WALL - 1].visible = true;
 
         // Create enemies
-        enemies = this.physics.add.group();
-        enemies.defaultKey = 'enemy';
+        enemies = this.physics.add.group({
+            defaultKey: 'enemy',
+            maxSize: 1000
+        });
 
         // Create out-of-play bounds (remove enemies once they hit this)
         oopBounds = this.physics.add.staticGroup();
@@ -335,14 +338,14 @@
         }
         else
         {
-            spawnEnemy.call(this, true, 20, 10);
-            spawnEnemy.call(this, true, 20, 20);
-            spawnEnemy.call(this, true, 30, 10);
-            spawnEnemy.call(this, true, 30, 20);
-            spawnEnemy.call(this, true, 40, 10);
-            spawnEnemy.call(this, true, 40, 20);
-            spawnEnemy.call(this, true, 50, 10);
-            spawnEnemy.call(this, true, 50, 20);
+            // Generate grid of stationary enemies
+            for (var xPos = 100; xPos < 500; xPos += 100)
+            {
+                for (var laneIndex = 0; laneIndex < NUM_LANE_WALL - 1; laneIndex += 10)
+                {
+                    spawnEnemy.call(this, true, xPos, laneIndex, 0);
+                }
+            }
         }
         // Pointer event listeners
         groundImage.setInteractive().on('pointerdown', activateWeaponOnGround, this);
@@ -539,28 +542,22 @@
         recordEnemyKill(enemy);
     }
 
-    function spawnEnemy(debug, index, speed)
+    function spawnEnemy(debugOn, debugXStartPos, debugLaneIndex, debugSpeed)
     {
         // Choose a random lane/wall for this enemy
-        if (!debug)
-        {
-            index = Phaser.Math.Between(0, 59);
-        }
+        var index = debugOn ? debugLaneIndex : Phaser.Math.Between(0, NUM_LANE_WALL - 1);
         var l = lanes.children.entries[index];
         var w = walls.children.entries[index];
 
         // Instantiate enemy starting position
         var e = enemies.create();
-        e.x = 0;
+        e.x = debugOn ? debugXStartPos : 0;
         e.y = l.y - l.height/2 - e.height/2;
         e.setData('startX', e.x);
         e.setData('startY', e.y);
 
         // Choose a random walk speed for the enemy
-        if (!debug)
-        {
-            speed = Phaser.Math.Between(100, 200);
-        }
+        var speed = debugOn ? debugSpeed : Phaser.Math.Between(100, 200);
         e.setData('speed', speed);
         e.setVelocityX(speed);
 
