@@ -94,6 +94,10 @@
     var hiraishinPointer;    
     var hiraishinPointerDefaultAlpha = 0.5;
     var hiraishinTargettingActive = false;
+    var kunaiGroup;
+    var kunaiHitBox;
+    var numberOfKunai = 5;
+    var kunaiThrown = false;
 
     var game = new Phaser.Game(config);
     
@@ -131,6 +135,7 @@
         this.load.image('hiraishinAOE', 'assets/hiraishinAOE.png');
         this.load.image('kunai', 'assets/kunai.png');
         this.load.image('kunaiHitBox', 'assets/kunaiHitBox.png');
+        this.load.image('pixel', 'assets/pixel.png');
     }
     
     function create()
@@ -290,14 +295,16 @@
         // Create weapon object groups
         books = this.physics.add.group();
         books.defaultKey = 'book';
-        
         portals = this.physics.add.staticGroup();
         portals.defaultKey = 'portal_orange';
         portalBounds = this.physics.add.staticGroup();
         portalBounds.defaultKey = 'wall';
-
         thunderHitBox = this.physics.add.staticGroup();
         thunderHitBox.defaultKey = 'thunderHitBox';
+        kunaiGroup = this.physics.add.group();
+        kunaiGroup.defaultKey = 'kunai';
+        kunaiHitBox = this.physics.add.staticGroup();
+        kunaiHitBox.defaultKey = 'kunaiHitBox';
 
         this.physics.add.collider(enemies, oopBounds, hitEnemyOOP, null, this);
         this.physics.add.collider(books, oopBounds, hitOOP, null, this);
@@ -380,6 +387,22 @@
             pikachuPointer.alpha = pikachuPointerDefaultAlpha + 
                 (1 - pikachuPointerDefaultAlpha) * (chargePercentage / 100);
         }
+        else if (kunaiThrown)
+        {
+            if (kunaiGroup.children.entries.length == 0)
+            {
+                kunaiThrown = false;
+            }
+            else
+            {
+                console.log("number of kunai: " + kunaiGroup.children.entries.length);
+                // Note: Can't use Set.Iterate here because kunaiFlightControl modifies the set size
+                for (var i = 0; i < kunaiGroup.children.entries.length; i++)
+                {
+                    kunaiFlightControl.call(this, kunaiGroup.children.entries[i]);
+                }
+            }
+        }
     }
 
     function increaseCharge()
@@ -395,6 +418,42 @@
         pikachuPointer.anims.play('idlePika');
         thunderAnimation.visible = false;
         allowCharge = true;
+    }
+
+    function kunaiFlightControl(kunai)
+    {
+        var path = kunai.getData('path');
+        var pathProgress = kunai.getData('pathProgress');
+        if (pathProgress < path.length)
+        {
+            kunai.x = path[pathProgress].x;
+            kunai.y = path[pathProgress].y;
+            kunai.rotation = path[pathProgress].angle;
+            pathProgress += 10;
+            kunai.setData('pathProgress', pathProgress);
+        }
+        if (pathProgress >= path.length)
+        {
+            console.log('create hit box');
+            // Create temporary hit box
+            var hitBox = kunaiHitBox.create(kunai.x, kunai.y);
+            hitBox.visible = false;
+            this.time.addEvent({
+                delay: 100,
+                callback: clearKunaiHitBox,
+                args: [hitBox]
+            });
+            // Create alpha tween
+            this.tweens.add({
+                targets: kunai,
+                duration: 500,
+                alpha: 0
+            });
+            // TODO: This currently only removes the kunai from the group,
+            // but the game object still exists! I need to refactor how
+            // I do sprite pool management.
+            kunaiGroup.remove(kunai);
+        }
     }
 
     function hitWall(enemy, wall)
@@ -475,6 +534,11 @@
         enemy.setVelocityY(-100);
     }
 
+    function hitKunai(enemy, kunai)
+    {
+        recordEnemyKill(enemy);
+    }
+
     function spawnEnemy(debug, index, speed)
     {
         // Choose a random lane/wall for this enemy
@@ -517,6 +581,8 @@
         e.setData('thunderCollider', thunderCollider);
         var bubbleCollider = this.physics.add.overlap(e, bubblePointer, hitBubble, null, this);
         e.setData('bubbleCollider', bubbleCollider);
+        var kunaiCollider = this.physics.add.overlap(e, kunaiHitBox, hitKunai, null, this);
+        e.setData('kunaiCollider', kunaiCollider);
 
         // Add enemy health
         e.setData('health', 100);
@@ -711,9 +777,59 @@
         }
         else if (selectedWeapon == weapons.HIRAISHIN)
         {
+            // Disable AOE marker
             hiraishinTargettingActive = false;
             hiraishinPointer.getData('tween').stop();
             hiraishinPointer.disableBody(true, true);
+            // Generate kunai and paths
+            for (var kunaiIndex = 0; kunaiIndex < numberOfKunai; kunaiIndex++)
+            {
+                // Calculate path points
+                var path = [];
+                var points = {
+                    'x': [ 0, 0, 0 ],
+                    'y': [ 0, 0, 0 ]
+                };
+                // Point 3: Landing point
+                points.x[2] = Phaser.Math.Between(
+                    hiraishinPointer.x - hiraishinPointer.body.width/2,
+                    hiraishinPointer.x + hiraishinPointer.body.width/2);
+                points.y[2] = Phaser.Math.Between(
+                    hiraishinPointer.y - hiraishinPointer.body.height/2,
+                    hiraishinPointer.y + hiraishinPointer.body.height/2);
+                // Point 1: Starting point
+                // TODO: Change 200 to the actual wall height
+                var laneWall = getLaneAndWallFromYPos(points.y[2]);
+                points.x[0] = laneWall.wall.x;
+                points.y[0] = laneWall.lane.y - 200;
+                // Point 2: Control point
+                points.x[1] = points.x[0] - (points.x[0] - points.x[2])*0.3;
+                points.y[1] = points.y[0] - 100;
+                // Perform path interpolation
+                var ix = 0;
+                var pathIncrement = 1 / config.width; // 1 pixel
+                for (var pathPos = 0; pathPos <= 1; pathPos += pathIncrement)
+                {
+                    var px = Phaser.Math.Interpolation.Bezier(points.x, pathPos);
+                    var py = Phaser.Math.Interpolation.Bezier(points.y, pathPos);
+                    var node = { x: px, y: py, angle: 0 };
+                    if (ix > 0)
+                    {
+                        node.angle = Phaser.Math.Angle.Reverse(
+                            Phaser.Math.Angle.BetweenPoints(path[ix - 1], node));
+                    }
+                    path.push(node);
+                    ix++;
+                    // Debug: draw kunai path
+                    //this.add.image(px, py, 'pixel');
+                }
+                // Create kunai game object
+                var kunai = kunaiGroup.create(points.x[0], points.y[0]);
+                kunai.setData('points', points);
+                kunai.setData('path', path);
+                kunai.setData('pathProgress', 0);
+            }
+            kunaiThrown = true;
         }
     }
 
@@ -738,9 +854,15 @@
         portals.remove(portal, true, true);
     }
 
-    function clearThunderHitBox(hitbox)
+    function clearThunderHitBox(hitBox)
     {
-        thunderHitBox.remove(hitbox, true, true);
+        thunderHitBox.remove(hitBox, true, true);
+    }
+
+    function clearKunaiHitBox(hitBox)
+    {
+        console.log("remove kunai hitbox");
+        kunaiHitBox.remove(hitBox, true, true);
     }
 
     function removeAllCollidersFromEnemy(enemy)
@@ -751,6 +873,7 @@
         this.physics.world.removeCollider(enemy.getData('portalCollider'));
         this.physics.world.removeCollider(enemy.getData('thunderCollider'));
         this.physics.world.removeCollider(enemy.getData('bubbleCollider'));
+        this.physics.world.removeCollider(enemy.getData('kunaiCollider'));
     }
 
 </script>
