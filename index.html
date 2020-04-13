@@ -67,6 +67,8 @@
     var selectedWeaponText;
     // Books
     var books;
+    var bookVelocity = -500;
+    var bookAngularVelocity = -720
     // Portals
     var portals;
     var portalBounds;
@@ -88,6 +90,10 @@
     var bubblePointer;
     var bubblePointerDefaultAlpha = 0.5;
     var bubbleActivated = false;
+    // Hiraishin
+    var hiraishinPointer;    
+    var hiraishinPointerDefaultAlpha = 0.5;
+    var hiraishinTargettingActive = false;
 
     var game = new Phaser.Game(config);
     
@@ -122,6 +128,9 @@
             startFrame: 0,
             endFrame: 3
         });
+        this.load.image('hiraishinAOE', 'assets/hiraishinAOE.png');
+        this.load.image('kunai', 'assets/kunai.png');
+        this.load.image('kunaiHitBox', 'assets/kunaiHitBox.png');
     }
     
     function create()
@@ -162,7 +171,7 @@
             frameRate: 10,
             repeat: 2
         });
-        bubblePointer = this.physics.add.sprite(400, 300, 'bubblePointer', 0);
+        bubblePointer = this.physics.add.sprite(400, 300, 'bubblePointer');
         bubblePointer.alpha = bubblePointerDefaultAlpha;
         bubblePointer.depth = groundImage.depth + depths.POINTER;
         this.anims.create({
@@ -177,6 +186,27 @@
             repeat: -1
         });
         bubblePointer.disableBody(true, true);
+        hiraishinPointer = this.physics.add.image(400, 300, 'hiraishinAOE');
+        hiraishinPointer.alpha = hiraishinPointerDefaultAlpha;
+        hiraishinPointer.depth = groundImage.depth + depths.GROUND;
+        hiraishinPointer.disableBody(true, true);
+        hiraishinPointer.setData('tween', this.tweens.add({
+            targets: hiraishinPointer,
+            duration: 250,
+            scaleX: 4,
+            scaleY: 4,
+            yoyo: true,
+            repeat: -1
+        }));
+        // TODO Currently masking out the sky with the test ground
+        // Maybe make a better mask and not hardcode the values
+        hiraishinPointer.mask = new Phaser.Display.Masks.BitmapMask(this, this.make.image({
+            x: 400,
+            y: 150,
+            key: 'ground',
+            add: false
+        }));
+        hiraishinPointer.mask.invertAlpha = true;
 
         // Register keyboard inputs
         // Create key objects, which are emitOnce by default.
@@ -309,6 +339,7 @@
         }
         // Pointer event listeners
         groundImage.setInteractive().on('pointerdown', activateWeaponOnGround, this);
+        groundImage.setInteractive().on('pointermove', moveWeaponOnGround, this);
         groundImage.setInteractive().on('pointerup', releaseWeaponOnGround, this);
         this.input.on('pointerdown', activateWeapon, this);
         this.input.on('pointerup', releaseWeapon, this);
@@ -400,8 +431,8 @@
         this.physics.world.removeCollider(enemy.getData('bookCollider'));
         enemy.setVelocity(-400, -400);
         enemy.setGravityY(300);
-        book.setVelocityX(-150);
-        book.setAngularVelocity(-360);
+        book.setVelocityX(bookVelocity);
+        book.setAngularVelocity(bookAngularVelocity);
     }
 
     function hitPortal(enemy, portal)
@@ -531,23 +562,14 @@
     {
         if (selectedWeapon == weapons.BOOK)
         {
-            // Map the y-position to lane, find the corresponding wall
-            // Use wall x-position to be the book spawn x-position
-            var pointerY = this.input.activePointer.y;
-            // Subtract first lane position divided by lane increments
-            var laneIndex = Phaser.Math.RoundTo(
-                (pointerY - lanes.children.entries[0].y) / 
-                (lanes.children.entries[1].y - lanes.children.entries[0].y), 
-                0);
-
             var b = books.create();
-            console.log(laneIndex);
-            b.x = walls.children.entries[laneIndex].x;
-            b.y = pointerY;
+            var laneWall = getLaneAndWallFromYPos(this.input.activePointer.y);
+            b.x = laneWall.wall.x;
+            b.y = this.input.activePointer.y;
             // TODO Currently the rotation only affects the GameObject but not the hitbox. This might be OK
-            b.setVelocityX(-200);
-            b.setAngularVelocity(-360);
-            b.setScale(0.5);
+            b.setVelocityX(bookVelocity);
+            b.setAngularVelocity(bookAngularVelocity);
+            b.setScale(0.3);
         }
         else if (selectedWeapon == weapons.PORTAL)
         {
@@ -582,6 +604,17 @@
                 args: [p]
             });
         }
+        else if (selectedWeapon == weapons.HIRAISHIN)
+        {
+            hiraishinTargettingActive = true;
+            hiraishinPointer.enableBody(
+                true,
+                this.input.activePointer.x,
+                this.input.activePointer.y,
+                true,
+                true);
+            hiraishinPointer.getData('tween').restart();
+        }
     }
 
     function activateWeapon()
@@ -606,6 +639,14 @@
                 true,
                 true);
             bubblePointer.anims.play('activeBubble');
+        }
+    }
+
+    function moveWeaponOnGround()
+    {
+        if (selectedWeapon == weapons.HIRAISHIN && hiraishinTargettingActive)
+        {
+            hiraishinPointer.setPosition(this.input.activePointer.x, this.input.activePointer.y);
         }
     }
 
@@ -668,6 +709,26 @@
             bubblePointer.anims.play('idleBubble');
             bubblePointer.disableBody(true, true);
         }
+        else if (selectedWeapon == weapons.HIRAISHIN)
+        {
+            hiraishinTargettingActive = false;
+            hiraishinPointer.getData('tween').stop();
+            hiraishinPointer.disableBody(true, true);
+        }
+    }
+
+    function getLaneAndWallFromYPos(y)
+    {
+        // Map the y-position to lane, find the corresponding wall
+        // Subtract first lane position divided by lane increments
+        var laneIndex = Phaser.Math.RoundTo(
+            (y - lanes.children.entries[0].y) / 
+            (lanes.children.entries[1].y - lanes.children.entries[0].y), 
+            0);
+        return { 
+            lane: lanes.children.entries[laneIndex],
+            wall: walls.children.entries[laneIndex]
+        };
     }
 
     function closePortal(portal)
