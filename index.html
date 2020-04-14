@@ -42,6 +42,8 @@
     
     var enemies;
     var debugWave = true;
+    var waveSize = 20;
+    var spawnCount = 0;
 
     var walls;
     var lanes;
@@ -277,7 +279,7 @@
         // Create enemies
         enemies = this.physics.add.group({
             defaultKey: 'enemy',
-            maxSize: 1000
+            maxSize: 10
         });
 
         // Create out-of-play bounds (remove enemies once they hit this)
@@ -317,36 +319,27 @@
         playerHealthText = this.add.text(550, 16, 'Health: 100', { fontSize: '32px', fill: '#000' });
         selectedWeaponText = this.add.text(16, 40, 'Weapon: ' + weapons.TELEPORTER, { fontSize: '32px', fill: '#000' });
 
-        // Event handlers
-        // Spawn timer for the enemy
-        var enemyCount;
-        var waveSize = 20;
-        if (!debugWave)
-        {
-            for (enemyCount = 0; enemyCount < waveSize; enemyCount++)
-            {
-                // Spawn delay essentially determines how long the wave will last
-                // Enemies will be distributed across this time
-                var spawnDelay = Phaser.Math.Between(100, 1000);
-                this.time.addEvent(
-                    { 
-                        delay: spawnDelay,
-                        callback: spawnEnemy,
-                        callbackScope: this
-                    });
-            }
-        }
-        else
+        // DEBUG: Generate a stationary grid of enemies
+        if (debugWave)
         {
             // Generate grid of stationary enemies
-            for (var xPos = 100; xPos < 500; xPos += 100)
+            for (var xPos = 100; xPos < 500; xPos += 150)
             {
-                for (var laneIndex = 0; laneIndex < NUM_LANE_WALL - 1; laneIndex += 10)
+                // It's OK to have laneIndex = NUM_LANE_WALL since spawnEnemy()
+                // will clamp the index to NUM_LANE_WALL - 1 anyway
+                for (var laneIndex = 0; laneIndex <= NUM_LANE_WALL; laneIndex += 20)
                 {
-                    spawnEnemy.call(this, true, xPos, laneIndex, 0);
+                    var e = enemies.get();
+                    if (e)
+                    {
+                        e.setActive(true);
+                        e.setVisible(true);
+                        spawnEnemy.call(this, e, xPos, laneIndex, 0);
+                    }
                 }
             }
         }
+
         // Pointer event listeners
         groundImage.setInteractive().on('pointerdown', activateWeaponOnGround, this);
         groundImage.setInteractive().on('pointermove', moveWeaponOnGround, this);
@@ -375,6 +368,12 @@
     
     function update()
     {
+        // Reserve available enemy objects to spawn if the wave isn't over
+        if (spawnCount < waveSize && enemies.countActive(true) < enemies.maxSize && !debugWave)
+        {
+            allocateEnemy.call(this);
+        }
+
         if (selectedWeapon == weapons.PIKACHU && isChargingThunder)
         {
             if (chargePercentage < 100 && !chargeLock)
@@ -485,7 +484,7 @@
 
     function hitEnemyOOP(enemy, oop)
     {
-        recordEnemyKill(enemy);
+        recordEnemyKill.call(this, enemy);
     }
 
     function hitBook(enemy, book)
@@ -539,37 +538,66 @@
 
     function hitKunai(enemy, kunai)
     {
-        recordEnemyKill(enemy);
+        recordEnemyKill.call(this, enemy);
     }
 
-    function spawnEnemy(debugOn, debugXStartPos, debugLaneIndex, debugSpeed)
+    function allocateEnemy()
+    {
+        var e = enemies.get();
+        if (!e) return;
+        // There is a free enemy object available
+        // Set it active, otherwise it remains available for another successful call to get()
+        // This allows multiple different spawnEnemy events to be fired for the same enemy
+        // Super bad since it'll repeatedly restart its position, without any collider cleanup
+        e.setActive(true);
+        // If an enemy object was created with get(), its location won't be set
+        // until spawnEnemy() is called, so set it invisible for now.
+        e.setVisible(false);
+        this.time.addEvent(
+            {
+                delay: Phaser.Math.Between(1000, 20000),
+                callback: spawnEnemy,
+                callbackScope: this,
+                args: [e]
+            });
+        spawnCount++;
+    }
+        
+
+    function spawnEnemy(e, debugXStartPos = 0, debugLaneIndex = 0, debugSpeed = 0)
     {
         // Choose a random lane/wall for this enemy
-        var index = debugOn ? debugLaneIndex : Phaser.Math.Between(0, NUM_LANE_WALL - 1);
+        var index = debugWave ? 
+            Phaser.Math.Clamp(debugLaneIndex, 0, NUM_LANE_WALL - 1) : 
+            Phaser.Math.Between(0, NUM_LANE_WALL - 1);
         var l = lanes.children.entries[index];
         var w = walls.children.entries[index];
 
-        // Instantiate enemy starting position
-        var e = enemies.create();
-        e.x = debugOn ? debugXStartPos : 0;
+        // ENEMY STATS
+        // Starting position
+        e.setVisible(true);
+        e.x = debugWave ? debugXStartPos : 0;
         e.y = l.y - l.height/2 - e.height/2;
         e.setData('startX', e.x);
         e.setData('startY', e.y);
-
-        // Choose a random walk speed for the enemy
-        var speed = debugOn ? debugSpeed : Phaser.Math.Between(100, 200);
+        // Walk speed
+        var speed = debugWave ? debugSpeed : Phaser.Math.Between(100, 200);
         e.setData('speed', speed);
         e.setVelocityX(speed);
+        // Health
+        e.setData('health', 100);
+        // Depth
+        // Make enemies always on top of ground level
+        e.depth = groundImage.depth + depths.ENEMY;
 
-        // Add collider between the enemy and its respective lane
+        // ENEMY COLLIDERS/LISTENERS
+        // Need to be cleaned up before being reused
+        // Lane/Wall colliders
         var laneCollider = this.physics.add.collider(e, l, landOnGround, null, this);
         e.setData('laneCollider', laneCollider);
-
-        // Add collider between the enemy and its respective wall
         var wallCollider = this.physics.add.collider(e, w, hitWall, null, this);
         e.setData('wallCollider', wallCollider);
-
-        // Add collider between the enemy and weapons
+        // Weapon colliders
         var bookCollider = this.physics.add.collider(e, books, hitBook, null, this);
         e.setData('bookCollider', bookCollider);
         var portalCollider = this.physics.add.overlap(e, portals, hitPortal, null, this);
@@ -580,37 +608,33 @@
         e.setData('bubbleCollider', bubbleCollider);
         var kunaiCollider = this.physics.add.overlap(e, kunaiHitBox, hitKunai, null, this);
         e.setData('kunaiCollider', kunaiCollider);
-
-        // Add enemy health
-        e.setData('health', 100);
-
-        // Make enemies always on top of ground level
-        e.depth = groundImage.depth + depths.ENEMY;
-
-        // Add clicker function
-        e.setInteractive().on('pointerdown', function (pointer) {
-            if (selectedWeapon == weapons.TELEPORTER)
-            {
-                health = e.getData('health');
-                health -= 100;
-                if (health <= 0)
+        // Click event listener
+        e.setInteractive().on(
+            'pointerdown', 
+            function (pointer) {
+                if (selectedWeapon == weapons.TELEPORTER)
                 {
-                    recordEnemyKill(e);
+                    console.log("click detected");
+                    health = e.getData('health');
+                    health -= 100;
+                    if (health <= 0)
+                    {
+                        recordEnemyKill.call(this, e);
+                    }
+                    e.setData('health', health);
                 }
-                e.setData('health', health);
-                // Bounce upon being clicked
-                //e.setGravityY(300);
-                //e.setVelocityY(-50);
-            }
-        });
+            }, 
+            this);
     }
 
     function recordEnemyKill(enemy)
     {
         score += 10;
         scoreText.setText('Score: ' + score);
-        enemy.disableBody(true, true);
-        enemy.removeInteractive();
+        enemy.setVelocity(0, 0);
+        removeAllCollidersFromEnemy.call(this, enemy);
+        enemy.removeAllListeners();
+        enemies.killAndHide(enemy);
     }
 
     // Reset motion for enemies once they land back on the ground
