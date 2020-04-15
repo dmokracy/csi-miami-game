@@ -1,7 +1,9 @@
-import TitleScene from './titleScene.js';
-import BattleScene from './battleScene.js';
+import {TitleScene} from './titleScene.js';
+import {InstructionsScene} from './instructionsScene.js';
+import {BattleScene} from './battleScene.js';
 
 var titleScene = new TitleScene();
+var instructionsScene = new InstructionsScene();
 var battleScene = new BattleScene();
 
 var config = {
@@ -19,6 +21,7 @@ var config = {
 var game = new Phaser.Game(config);
 
 game.scene.add('titleScene', titleScene);
+game.scene.add('instructionsScene', instructionsScene);
 game.scene.add('battleScene', battleScene);
 
 game.scene.start('titleScene');
