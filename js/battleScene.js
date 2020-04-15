@@ -1,4 +1,15 @@
 
+    // Enemy wave
+    var enemies;
+    var debugWave = false;
+    var waveSize = 20;
+    var spawnCount = 0;
+    var spawnCountText;
+   
+    // Environment
+    var walls;
+    var lanes;
+    const NUM_LANE_WALL = 60;
     const depths = {
         GROUND: 0,
         BELOW_ENEMY: 1,
@@ -6,20 +17,10 @@
         ABOVE_ENEMY: 3,
         POINTER: 4
     };
-    
-    var enemies;
-    var debugWave = false;
-    var waveSize = 20;
-    var spawnCount = 0;
-    var spawnCountText;
-    
-    var walls;
-    var lanes;
-    const NUM_LANE_WALL = 60;
-    
     var groundImage;
     var oopBounds;
-    
+   
+    // Player stats and HUD
     var playerHealth = 100;
     var playerHealthText;
     var score = 0;
@@ -71,7 +72,7 @@
     var numberOfKunai = 5;
     var kunaiThrown = false;
 
-class BattleScene extends Phaser.Scene {
+export class BattleScene extends Phaser.Scene {
 
 
     constructor() {
@@ -894,4 +895,3 @@ function removeAllCollidersFromEnemy(enemy, removeOOP)
     this.physics.world.removeCollider(enemy.getData('bubbleCollider'));
     this.physics.world.removeCollider(enemy.getData('kunaiCollider'));
 }
-export default BattleScene;
