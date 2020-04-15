@@ -3,7 +3,7 @@
 <head> 
     <meta charset="UTF-8" />
     <title>Coronavirus Spring Invasion: Miami</title>
-    <script src="//cdn.jsdelivr.net/npm/phaser@3.11.0/dist/phaser.js"></script>
+    <script src="//cdn.jsdelivr.net/npm/phaser@3.22.0/dist/phaser.js"></script>
     <style type="text/css">
         body {
             margin: 0;
@@ -41,9 +41,10 @@
     };
     
     var enemies;
-    var debugWave = true;
+    var debugWave = false;
     var waveSize = 20;
     var spawnCount = 0;
+    var spawnCountText;
 
     var walls;
     var lanes;
@@ -311,13 +312,13 @@
         kunaiHitBox = this.physics.add.staticGroup();
         kunaiHitBox.defaultKey = 'kunaiHitBox';
 
-        this.physics.add.collider(enemies, oopBounds, hitEnemyOOP, null, this);
         this.physics.add.collider(books, oopBounds, hitOOP, null, this);
 
         // Add HUD elements
-        scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#000' });
-        playerHealthText = this.add.text(550, 16, 'Health: 100', { fontSize: '32px', fill: '#000' });
-        selectedWeaponText = this.add.text(16, 40, 'Weapon: ' + weapons.TELEPORTER, { fontSize: '32px', fill: '#000' });
+        scoreText = this.add.text(16, 16, 'Score: 0');
+        playerHealthText = this.add.text(650, 16, 'Health: 100');
+        selectedWeaponText = this.add.text(16, 32, 'Weapon: ' + weapons.TELEPORTER);
+        spawnCountText = this.add.text(16, 48, 'Spawn Count: 0');
 
         // DEBUG: Generate a stationary grid of enemies
         if (debugWave)
@@ -369,7 +370,7 @@
     function update()
     {
         // Reserve available enemy objects to spawn if the wave isn't over
-        if (spawnCount < waveSize && enemies.countActive(true) < enemies.maxSize && !debugWave)
+        if (spawnCount < waveSize && enemies.getTotalFree() > 0 && !debugWave)
         {
             allocateEnemy.call(this);
         }
@@ -484,11 +485,13 @@
 
     function hitEnemyOOP(enemy, oop)
     {
+        console.log("enemy hit OOP");
         recordEnemyKill.call(this, enemy);
     }
 
     function hitBook(enemy, book)
     {
+        // Remove this collider early so other books won't hit it
         this.physics.world.removeCollider(enemy.getData('bookCollider'));
         enemy.setVelocity(-400, -400);
         enemy.setGravityY(300);
@@ -505,8 +508,8 @@
         enemy.mask = new Phaser.Display.Masks.BitmapMask(this, portal.getData('mask'));
         enemy.mask.invertAlpha = true;
         // Add bounds to enemy as it falls through the portal to prevent clipping through ground
-        this.physics.add.collider(enemy, portal.getData('boundLeft'));
-        this.physics.add.collider(enemy, portal.getData('boundRight'));
+        enemy.setData('portalBoundLeft', this.physics.add.collider(enemy, portal.getData('boundLeft')));
+        enemy.setData('portalBoundRight', this.physics.add.collider(enemy, portal.getData('boundRight')));
         // Prevent the enemy from colliding with other portals and resetting its mask
         this.physics.world.removeCollider(enemy.getData('portalCollider'));
     }
@@ -515,25 +518,30 @@
     {
         if (Phaser.Math.Between(0, 100) < THUNDER_ACCURACY)
         {
-            removeAllCollidersFromEnemy.call(this, enemy);
-            var blastMagnitude = 100 / (enemy.x - thunder.x);
+            var distance = Phaser.Math.Distance.BetweenPoints(enemy.getCenter(), thunder.getCenter());
+            var direction = Math.sign(enemy.x - thunder.x);
+            console.log(distance);
+            removeAllCollidersFromEnemy.call(this, enemy, false);
+            var blastMagnitude = 
+                200 / Math.max(distance, 40);
             console.log("blastMagnitude: " + blastMagnitude);
-            enemy.setVelocity(50 * blastMagnitude, -250 * Math.abs(blastMagnitude))
+            enemy.setVelocity(50 * blastMagnitude * direction, -250 * Math.abs(blastMagnitude))
             enemy.setAngularVelocity(-360);
             enemy.setGravityY(300);
             this.tweens.add({
                 targets: enemy,
                 duration: 1000,
-                scaleX: 0.01,
-                scaleY: 0.01
+                scaleX: 0.1,
+                scaleY: 0.1,
+                alpha: 0
             });
         }
     }
 
     function hitBubble(enemy, bubble)
     {
-        removeAllCollidersFromEnemy.call(this, enemy);
-        enemy.setVelocityY(-100);
+        removeAllCollidersFromEnemy.call(this, enemy, false);
+        enemy.setVelocity(0, -100);
     }
 
     function hitKunai(enemy, kunai)
@@ -566,6 +574,7 @@
 
     function spawnEnemy(e, debugXStartPos = 0, debugLaneIndex = 0, debugSpeed = 0)
     {
+        spawnCountText.setText("Spawn Count: " + spawnCount);
         // Choose a random lane/wall for this enemy
         var index = debugWave ? 
             Phaser.Math.Clamp(debugLaneIndex, 0, NUM_LANE_WALL - 1) : 
@@ -580,6 +589,8 @@
         e.y = l.y - l.height/2 - e.height/2;
         e.setData('startX', e.x);
         e.setData('startY', e.y);
+        // These attributes don't seem to be reset perfectly in cleanup
+        e.rotation = 0;
         // Walk speed
         var speed = debugWave ? debugSpeed : Phaser.Math.Between(100, 200);
         e.setData('speed', speed);
@@ -592,22 +603,16 @@
 
         // ENEMY COLLIDERS/LISTENERS
         // Need to be cleaned up before being reused
-        // Lane/Wall colliders
-        var laneCollider = this.physics.add.collider(e, l, landOnGround, null, this);
-        e.setData('laneCollider', laneCollider);
-        var wallCollider = this.physics.add.collider(e, w, hitWall, null, this);
-        e.setData('wallCollider', wallCollider);
+        // Environment colliders
+        e.setData('laneCollider', this.physics.add.collider(e, l, landOnGround, null, this));
+        e.setData('wallCollider', this.physics.add.collider(e, w, hitWall, null, this));
+        e.setData('oopCollider', this.physics.add.collider(e, oopBounds, hitEnemyOOP, null, this));
         // Weapon colliders
-        var bookCollider = this.physics.add.collider(e, books, hitBook, null, this);
-        e.setData('bookCollider', bookCollider);
-        var portalCollider = this.physics.add.overlap(e, portals, hitPortal, null, this);
-        e.setData('portalCollider', portalCollider);
-        var thunderCollider = this.physics.add.overlap(e, thunderHitBox, hitThunder, null, this);
-        e.setData('thunderCollider', thunderCollider);
-        var bubbleCollider = this.physics.add.overlap(e, bubblePointer, hitBubble, null, this);
-        e.setData('bubbleCollider', bubbleCollider);
-        var kunaiCollider = this.physics.add.overlap(e, kunaiHitBox, hitKunai, null, this);
-        e.setData('kunaiCollider', kunaiCollider);
+        e.setData('bookCollider', this.physics.add.collider(e, books, hitBook, null, this));
+        e.setData('portalCollider', this.physics.add.overlap(e, portals, hitPortal, null, this));
+        e.setData('thunderCollider', this.physics.add.overlap(e, thunderHitBox, hitThunder, null, this));
+        e.setData('kunaiCollider', this.physics.add.overlap(e, kunaiHitBox, hitKunai, null, this));
+        e.setData('bubbleCollider', this.physics.add.overlap(e, bubblePointer, hitBubble, null, this));
         // Click event listener
         e.setInteractive().on(
             'pointerdown', 
@@ -629,11 +634,27 @@
 
     function recordEnemyKill(enemy)
     {
+        // Update the score
         score += 10;
         scoreText.setText('Score: ' + score);
+
+        // Reset the enemy
+        // Resetting the position appeared to fix some weird hitbox glitching
+        // if a tween was being applied to the object while it hit the OOP boundary
+        enemy.setPosition(0, 0);
         enemy.setVelocity(0, 0);
+        enemy.setAngularVelocity(0);
+        enemy.setRotation(0); // Doesn't appear to work perfectly
+        enemy.setGravity(0, 0);
+        enemy.setScale(1, 1);
+        enemy.setAlpha(1);
+
+        // Perform cleanup
         removeAllCollidersFromEnemy.call(this, enemy);
         enemy.removeAllListeners();
+        enemy.clearMask();
+        this.tweens.killTweensOf(enemy);
+
         enemies.killAndHide(enemy);
     }
 
@@ -700,7 +721,6 @@
                 this.input.activePointer.y,
                 true,
                 true);
-            hiraishinPointer.getData('tween').restart();
         }
     }
 
@@ -796,11 +816,10 @@
             bubblePointer.anims.play('idleBubble');
             bubblePointer.disableBody(true, true);
         }
-        else if (selectedWeapon == weapons.HIRAISHIN)
+        else if (selectedWeapon == weapons.HIRAISHIN && hiraishinTargettingActive)
         {
             // Disable AOE marker
             hiraishinTargettingActive = false;
-            hiraishinPointer.getData('tween').stop();
             hiraishinPointer.disableBody(true, true);
             // Generate kunai and paths
             for (var kunaiIndex = 0; kunaiIndex < numberOfKunai; kunaiIndex++)
@@ -821,7 +840,9 @@
                 // Point 1: Starting point
                 // TODO: Change 200 to the actual wall height
                 var laneWall = getLaneAndWallFromYPos(points.y[2]);
-                points.x[0] = laneWall.wall.x;
+                // Set starting point a little behind the wall so that we can still
+                // hit enemies that are right at the wall
+                points.x[0] = laneWall.wall.x + 100;
                 points.y[0] = laneWall.lane.y - 200;
                 // Point 2: Control point
                 points.x[1] = points.x[0] - (points.x[0] - points.x[2])*0.3;
@@ -858,10 +879,10 @@
     {
         // Map the y-position to lane, find the corresponding wall
         // Subtract first lane position divided by lane increments
-        var laneIndex = Phaser.Math.RoundTo(
-            (y - lanes.children.entries[0].y) / 
-            (lanes.children.entries[1].y - lanes.children.entries[0].y), 
-            0);
+        var laneIndex = Phaser.Math.Clamp(
+            Phaser.Math.RoundTo((y - lanes.children.entries[0].y) / 
+            (lanes.children.entries[1].y - lanes.children.entries[0].y), 0),
+            0, NUM_LANE_WALL - 1);
         return { 
             lane: lanes.children.entries[laneIndex],
             wall: walls.children.entries[laneIndex]
@@ -886,12 +907,15 @@
         kunaiHitBox.remove(hitBox, true, true);
     }
 
-    function removeAllCollidersFromEnemy(enemy)
+    function removeAllCollidersFromEnemy(enemy, removeOOP)
     {
         this.physics.world.removeCollider(enemy.getData('laneCollider'));
         this.physics.world.removeCollider(enemy.getData('wallCollider'));
+        if (removeOOP) this.physics.world.removeCollider(enemy.getData('oopCollider'));
         this.physics.world.removeCollider(enemy.getData('bookCollider'));
         this.physics.world.removeCollider(enemy.getData('portalCollider'));
+        this.physics.world.removeCollider(enemy.getData('portalBoundLeft'));
+        this.physics.world.removeCollider(enemy.getData('portalBoundRight'));
         this.physics.world.removeCollider(enemy.getData('thunderCollider'));
         this.physics.world.removeCollider(enemy.getData('bubbleCollider'));
         this.physics.world.removeCollider(enemy.getData('kunaiCollider'));
