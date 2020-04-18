@@ -123,6 +123,7 @@ export class BattleScene extends Phaser.Scene {
         // Add background elements
         this.add.image(400, 300, 'battleground');
         groundImage = this.add.image(338, 450, 'ground');
+        groundImage.depth = depths.GROUND;
 
         // Pointers
         pikachuPointer = this.add.sprite(400, 300, 'pikachu');
@@ -538,7 +539,7 @@ function allocateEnemy()
     e.setVisible(false);
     this.time.addEvent(
         {
-            delay: Phaser.Math.Between(1000, 2000),
+            delay: Phaser.Math.Between(1000, 10000),
             callback: spawnEnemy,
             callbackScope: this,
             args: [e]
@@ -879,6 +880,7 @@ function levelUp()
     waveSize *= level;
     killCount = 0;
     spawnCount = 0;
+    spawnCountText.setText("Spawn Count: " + spawnCount);
 }
 
 function closePortal(portal)
