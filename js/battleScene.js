@@ -73,7 +73,7 @@
     var hiraishinTargettingActive = false;
     var kunaiGroup;
     var kunaiHitBox;
-    var numberOfKunai = 5;
+    var numberOfKunai = 10;
     var kunaiThrown = false;
 
 export class BattleScene extends Phaser.Scene {
@@ -91,6 +91,7 @@ export class BattleScene extends Phaser.Scene {
         this.load.image('ground', 'assets/ground.png');
         this.load.image('wall', 'assets/wall.png');
         this.load.image('lane', 'assets/lane.png');
+        this.load.image('skymask', 'assets/skymask.png');
         this.load.image('book', 'assets/book.png');
         this.load.image('portal_orange', 'assets/portal_orange.png');
         this.load.image('portal_mask', 'assets/portal_mask.png');
@@ -182,12 +183,11 @@ export class BattleScene extends Phaser.Scene {
             yoyo: true,
             repeat: -1
         }));
-        // TODO Currently masking out the sky with the test ground
-        // Maybe make a better mask and not hardcode the values
+        // TODO Don't hardcode position of sky mask
         hiraishinPointer.mask = new Phaser.Display.Masks.BitmapMask(this, this.make.image({
             x: 400,
             y: 150,
-            key: 'ground',
+            key: 'skymask',
             add: false
         }));
         hiraishinPointer.mask.invertAlpha = true;
@@ -408,7 +408,7 @@ function kunaiFlightControl(kunai)
         kunai.x = path[pathProgress].x;
         kunai.y = path[pathProgress].y;
         kunai.rotation = path[pathProgress].angle;
-        pathProgress += 10;
+        pathProgress += 20;
         kunai.setData('pathProgress', pathProgress);
     }
     if (pathProgress >= path.length)
