@@ -7,7 +7,7 @@ export class ShopScene extends Phaser.Scene {
     }
     
     preload() {
-        this.load.image('back_button', 'assets/back_button.png');
+        this.load.image('done_button', 'assets/done_button.png');
     }
 
     create() {
@@ -18,8 +18,8 @@ export class ShopScene extends Phaser.Scene {
             "SHOP",
             { fill: 'yellow' });
 
-        var backButton = this.add.image(400, 500, 'back_button');
-        backButton.setInteractive({
+        var doneButton = this.add.image(400, 500, 'done_button');
+        doneButton.setInteractive({
             useHandCursor: true
         }).on('pointerdown', this.clickBackButton, this);
     }

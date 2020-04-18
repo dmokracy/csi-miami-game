@@ -8,7 +8,7 @@
     var killCount = 0;
 
     // Level info
-    var level = 0;
+    var level = 1;
    
     // Environment
     var walls;
@@ -83,12 +83,6 @@ export class BattleScene extends Phaser.Scene {
         super({
             key: 'battleScene',
         });
-    }
-
-    init() {
-        console.log('init');
-        killCount = 0;
-        spawnCount = 0;
     }
     
     preload() {
