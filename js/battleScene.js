@@ -2,9 +2,13 @@
     // Enemy wave
     var enemies;
     var debugWave = false;
-    var waveSize = 20;
+    var waveSize = 5;
     var spawnCount = 0;
     var spawnCountText;
+    var killCount = 0;
+
+    // Level info
+    var level = 0;
    
     // Environment
     var walls;
@@ -77,16 +81,20 @@ export class BattleScene extends Phaser.Scene {
 
     constructor() {
         super({
-            key: 'battleScene'
+            key: 'battleScene',
         });
+    }
+
+    init() {
+        console.log('init');
+        killCount = 0;
+        spawnCount = 0;
     }
     
     preload() {
-        this.load.image('sky', 'assets/sky.png');
-        this.load.image('ground', 'assets/testground.png');
         this.load.image('enemy', 'assets/testenemy.png');
-        this.load.image('ocean', 'assets/ocean.png');
-        this.load.image('sun', 'assets/sun.png');
+        this.load.image('battleground', 'assets/battleground.png');
+        this.load.image('ground', 'assets/ground.png');
         this.load.image('wall', 'assets/wall.png');
         this.load.image('lane', 'assets/lane.png');
         this.load.image('book', 'assets/book.png');
@@ -119,10 +127,8 @@ export class BattleScene extends Phaser.Scene {
 
     create() {
         // Add background elements
-        this.add.image(400, 300, 'sky');
-        this.add.image(600, 100, 'sun').setScale(0.5);
-        groundImage = this.add.image(400, 450, 'ground');
-        this.add.image(400, 300, 'ocean');
+        this.add.image(400, 300, 'battleground');
+        groundImage = this.add.image(338, 450, 'ground');
 
         // Pointers
         pikachuPointer = this.add.sprite(400, 300, 'pikachu');
@@ -248,8 +254,6 @@ export class BattleScene extends Phaser.Scene {
             setXY: { x: 500, y: 300, stepX: 3 },
             visible: false
         });
-        walls.children.entries[0].visible = true;
-        walls.children.entries[NUM_LANE_WALL - 1].visible = true;
 
         // Create enemies
         enemies = this.physics.add.group({
@@ -339,6 +343,9 @@ export class BattleScene extends Phaser.Scene {
                 bubblePointer.setPosition(pointer.x, pointer.y);
             }
         });
+
+        // Scene event listeners
+        this.events.on('wake', levelUp);
     }
 
     update() {
@@ -537,7 +544,7 @@ function allocateEnemy()
     e.setVisible(false);
     this.time.addEvent(
         {
-            delay: Phaser.Math.Between(1000, 20000),
+            delay: Phaser.Math.Between(1000, 2000),
             callback: spawnEnemy,
             callbackScope: this,
             args: [e]
@@ -630,6 +637,13 @@ function recordEnemyKill(enemy)
     this.tweens.killTweensOf(enemy);
 
     enemies.killAndHide(enemy);
+    killCount++;
+    if (killCount == waveSize)
+    {
+        console.log("shop");
+        killCount = 0;
+        this.scene.switch('shopScene');
+    }
 }
 
 // Reset motion for enemies once they land back on the ground
@@ -862,6 +876,15 @@ function getLaneAndWallFromYPos(y)
         lane: lanes.children.entries[laneIndex],
         wall: walls.children.entries[laneIndex]
     };
+}
+
+function levelUp()
+{
+    console.log('levelUp');
+    level++;
+    waveSize *= level;
+    killCount = 0;
+    spawnCount = 0;
 }
 
 function closePortal(portal)
